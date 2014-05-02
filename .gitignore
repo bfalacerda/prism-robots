@@ -1,0 +1,10 @@
+*.o
+*.so
+*.a
+*.class
+*~
+*.log
+prism/bin/*
+
+.svn
+prism/obj/dd/dd_test
