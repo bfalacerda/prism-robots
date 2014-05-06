@@ -277,7 +277,7 @@ public class PrismManager
                     //result = manager.prism.modelCheck(propertiesFile, propertiesFile.getPropertyObject(0));
                     result=manager.callPrism(timeOfDayCommand,specification,true);
                     System.out.println(result.getResult());
-                    toClient = "planned";
+                    toClient =  result.getResult().toString();
                     System.out.println("planned");
                     out.println(toClient);
                 }
