@@ -1,6 +1,8 @@
 This file contains details of the changes in each new version of PRISM.
 
-New since last release:
+-----------------------------------------------------------------------------
+Version 4.2 (beta first released 12/5/2014)
+-----------------------------------------------------------------------------
 
 * Parametric model checking
 
@@ -26,7 +28,7 @@ New since last release:
   - additional graph zoom functionality on popup menu
 
 * Updates to build process
-  - fixed building on new versions of Cygwin (Windows)
+  - fixed building on new versions of Cygwin (32/64-bit Windows)
   - update CUDD to version 2.5.0
 
 -----------------------------------------------------------------------------

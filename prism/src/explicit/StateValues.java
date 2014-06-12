@@ -46,11 +46,12 @@ import prism.PrismException;
 import prism.PrismLangException;
 import prism.PrismLog;
 import prism.PrismUtils;
+import prism.StateVector;
 
 /**
  * Class for explicit-state storage of a state-indexed vector of values (int, double, boolean).
  */
-public class StateValues
+public class StateValues implements StateVector
 {
 	// Type (int, double or boolean)
 	protected Type type;
@@ -1262,12 +1263,10 @@ public class StateValues
 
 	// ...
 
-	/**
-	 * Clear the vector, i.e. free any used memory.
-	 * (Well, actually, just set pointer to null and wait for later garbage collection.)
-	 */
+	@Override
 	public void clear()
 	{
+		// Actually, just set pointers to null and wait for later garbage collection.
 		valuesI = null;
 		valuesD = null;
 		valuesB = null;
@@ -1275,9 +1274,13 @@ public class StateValues
 
 	// METHODS TO ACCESS VECTOR DATA
 
-	/**
-	 * Get the value of the ith element of the vector, as an Object.
-	 */
+	@Override
+	public int getSize()
+	{
+		return size;
+	}
+	
+	@Override
 	public Object getValue(int i)
 	{
 		if (type instanceof TypeInt) {
@@ -1610,10 +1613,12 @@ public class StateValues
 					log.println(getValue(n));
 				}
 			} else {
-				if (printIndices)
+				if (printIndices) {
 					log.print(n);
+					log.print(":");
+				}
 				if (printStates && statesList != null)
-					log.print(":" + statesList.get(n).toString());
+					log.print(statesList.get(n).toString());
 				if (printSparse && type instanceof TypeBool) {
 					log.println();
 				} else {

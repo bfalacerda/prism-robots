@@ -125,6 +125,7 @@ public class PrismTest
 			propertiesFile = prism.parsePropertiesFile(modulesFile, new File(args[1]));
 			
 			// Configure PRISM a bit
+			prism.setStoreVector(true);
 			// -exportadv adv.tra -exportprodstates adv.sta
 			prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "DTMC");
 			prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV_FILENAME, "adv.tra");
@@ -133,7 +134,17 @@ public class PrismTest
 			
 			// Check first property of file on model
 			result = prism.modelCheck(propertiesFile, propertiesFile.getPropertyObject(0));
+			
+			// Print result value
 			System.out.println(result.getResult());
+			// Print (then clear) result vector
+			StateVector vect = result.getVector();
+			int n = vect.getSize();
+			for (int i = 0; i < n; i++) {
+				System.out.print(vect.getValue(i) + " ");
+			}
+			System.out.println();
+			vect.clear();
 			
 			// Close down
 			prism.closeDown();

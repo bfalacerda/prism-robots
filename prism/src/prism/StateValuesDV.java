@@ -215,8 +215,7 @@ public class StateValuesDV implements StateValues
 		values.maxMTBDD(vec2, vars, odd);
 	}
 
-	// clear (free memory)
-
+	@Override
 	public void clear()
 	{
 		values.clear();
@@ -224,6 +223,19 @@ public class StateValuesDV implements StateValues
 
 	// METHODS TO ACCESS VECTOR DATA
 
+	@Override
+	public int getSize()
+	{
+		return values.getSize();
+	}
+	
+	@Override
+	public Object getValue(int i)
+	{
+		// TODO: cast to Integer or Double as required?
+		return values.getElement(i);
+	}
+	
 	// get vector
 
 	public DoubleVector getDoubleVector()
@@ -627,10 +639,12 @@ public class StateValuesDV implements StateValues
 					outputLog.println(d);
 				}
 			} else {
-				if (printIndices)
+				if (printIndices) {
 					outputLog.print(n);
+					outputLog.print(":");
+				}
 				if (printStates) {
-					outputLog.print(":(");
+					outputLog.print("(");
 					j = varList.getNumVars();
 					for (i = 0; i < j; i++) {
 						// integer variable

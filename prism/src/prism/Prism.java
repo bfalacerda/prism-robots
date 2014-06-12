@@ -193,6 +193,8 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 	protected String exportProductTransFilename = null;
 	protected boolean exportProductStates = false;
 	protected String exportProductStatesFilename = null;
+	// Store the final results vector after model checking?
+	protected boolean storeVector = false; 
 	// Generate/store a strategy during model checking?
 	protected boolean genStrat = false; 
 	// Do bisimulation minimisation before model checking?
@@ -589,6 +591,14 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 	}
 
 	/**
+	 * Specify whether or not to store the final results vector after model checking.
+	 */
+	public void setStoreVector(boolean storeVector)
+	{
+		this.storeVector = storeVector;
+	}
+
+	/**
 	 * Specify whether or not a strategy should be generated during model checking.
 	 */
 	public void setGenStrat(boolean genStrat)
@@ -884,6 +894,14 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 	public String getExportProductStatesFilename()
 	{
 		return exportProductStatesFilename;
+	}
+
+	/**
+	 * Whether or not to store the final results vector after model checking.
+	 */
+	public boolean getStoreVector()
+	{
+		return storeVector;
 	}
 
 	/**
@@ -2163,11 +2181,15 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 				throw new PrismException("Export not yet supported");
 			case Prism.EXPORT_DOT:
 				currentModelExpl.exportToDotFile(tmpLog);
+				break;
+			case Prism.EXPORT_DOT_STATES:
+				currentModelExpl.exportToDotFile(tmpLog, null, true);
+				break;
 			case Prism.EXPORT_MRMC:
 			case Prism.EXPORT_ROWS:
-			case Prism.EXPORT_DOT_STATES:
 				throw new PrismException("Export not yet supported");
 			}
+			tmpLog.close();
 		}
 
 		// for export to dot with states, need to do a bit more
@@ -3332,10 +3354,11 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 			// print out or export probabilities
 			if (probs != null)
 				probs.print(tmpLog, fileOut == null, exportType == EXPORT_MATLAB, fileOut == null);
-			else if( settings.getString(PrismSettings.PRISM_TRANSIENT_METHOD).equals("Fast adaptive uniformisation") ){
-				probsExpl.print(tmpLog, fileOut == null, exportType == EXPORT_MATLAB, true, false);
-			} else {
+			else if (!settings.getString(PrismSettings.PRISM_TRANSIENT_METHOD).equals("Fast adaptive uniformisation")) {
 				probsExpl.print(tmpLog, fileOut == null, exportType == EXPORT_MATLAB, fileOut == null, true);
+			} else {
+				// If full state space not computed, don't print vectors and always show states
+				probsExpl.print(tmpLog, fileOut == null, exportType == EXPORT_MATLAB, true, false);
 			}
 
 			// print out computation time
@@ -3425,6 +3448,7 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 		PrismMTBDD.closeDown();
 		PrismSparse.closeDown();
 		PrismHybrid.closeDown();
+		ParamModelChecker.closeDown();
 		// Close down CUDD/JDD
 		if (cuddStarted) {
 			JDD.CloseDownCUDD(check);
@@ -3455,6 +3479,7 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 		explicit.StateModelChecker mc = explicit.StateModelChecker.createModelChecker(currentModelType, this);
 		mc.setModulesFileAndPropertiesFile(currentModulesFile, propertiesFile);
 		// Pass any additional local settings
+		mc.setStoreVector(storeVector);
 		mc.setGenStrat(genStrat);
 		mc.setDoBisim(doBisim);
 		
