@@ -7,5 +7,5 @@
 prism/bin/*
 .svn
 prism/obj/dd/dd_test
-!prism/ext/lp_solve_5.5_java/demo2/Demo.class
+prism/lib/lpsolve55j.jar
 cudd/include/*
