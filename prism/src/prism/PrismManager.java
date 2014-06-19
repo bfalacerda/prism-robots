@@ -51,18 +51,19 @@ public class PrismManager
 
     
     
-    public PrismManager(){
+    public PrismManager(int port, String work_dir){
         try{
             PrismLog mainLog;
             
             //init socket
-            server = new ServerSocket(8085);
-            System.out.println("PRISM server running on port 8085");
+            server = new ServerSocket(port);
+            System.out.println("PRISM server running on port " + port);
             
 
             mdpModels = new HashMap<String,ModulesFile>();
             
-            directory=System.getProperty("user.home")+"/tmp/prism/";
+            //directory=System.getProperty("user.home")+"/tmp/prism/";
+            directory=work_dir;
                         
             // Init PRISM
             mainLog = new PrismDevNullLog(); 
@@ -215,7 +216,7 @@ public class PrismManager
         Result result;
 
             
-        PrismManager manager=new PrismManager();
+        PrismManager manager=new PrismManager(Integer.parseInt(args[0]), args[1]);
         
         
             
