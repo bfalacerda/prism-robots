@@ -155,10 +155,11 @@ public class Property extends ASTElement
 			// Look at each RESULT specification found
 			while (matcher.find()) {
 				String constValsSubstring = matcher.group(2) == null ? "" : matcher.group(2);
-				boolean match = true;
+				boolean allMatch = true;
 				// Look at each constant in the list
 				String ss[] = constValsSubstring.split(",");
 				for (String s : ss) {
+					boolean match = true;
 					s = s.trim();
 					if (s.length() == 0)
 						continue;
@@ -177,9 +178,11 @@ public class Property extends ASTElement
 					// Otherwise just check for exact string match for now
 					else
 						match = constValToMatch.toString().equals(constVal);
+					// We need all constants to match
+					allMatch &= match;
 				}
 				// Found it...
-				if (match) {
+				if (allMatch) {
 					strExpected = matcher.group(3);
 					continue;
 				}
@@ -289,7 +292,7 @@ public class Property extends ASTElement
 				throw new PrismException("Result is wrong type for (boolean-valued) property");
 			boolRes = ((Boolean) result).booleanValue();
 			if (boolRes != boolExp)
-				throw new PrismException("Wrong result (expected " + boolExp + ")");
+				throw new PrismException("Wrong result (expected " + boolExp + ", got " + boolRes + ")");
 		}
 
 		// Integer-valued properties
@@ -307,7 +310,7 @@ public class Property extends ASTElement
 				throw new PrismException("Result is wrong type for (integer-valued) property");
 			intRes = ((Integer) result).intValue();
 			if (intRes != intExp)
-				throw new PrismException("Wrong result (expected " + intExp + ")");
+				throw new PrismException("Wrong result (expected " + intExp + ", got " +intRes + ")");
 		}
 
 		// Double-valued properties
@@ -340,10 +343,10 @@ public class Property extends ASTElement
 			// Compare results
 			if (Double.isNaN(doubleRes)) {
 				if (!Double.isNaN(doubleExp))
-					throw new PrismException("Wrong result (expected " + doubleExp + ")");
+					throw new PrismException("Wrong result (expected " + doubleExp + ", got NaN)");
 			} else {
 				if (!PrismUtils.doublesAreCloseRel(doubleExp, doubleRes, 1e-5))
-					throw new PrismException("Wrong result (expected " + doubleExp + ")");
+					throw new PrismException("Wrong result (expected " + doubleExp + ", got " + doubleRes + ")");
 			}
 		}
 

@@ -174,7 +174,7 @@ public class NondetModelChecker extends NonProbModelChecker
 			if (p < 0 || p > 1)
 				throw new PrismException("Invalid probability bound " + p + " in P operator");
 		}
-		min = relOp.isLowerBound();
+		min = relOp.isLowerBound() || relOp.isMin();
 
 		// Check for trivial (i.e. stupid) cases
 		if (pb != null) {
@@ -239,7 +239,7 @@ public class NondetModelChecker extends NonProbModelChecker
 			if (r < 0)
 				throw new PrismException("Invalid reward bound " + r + " in R operator");
 		}
-		min = relOp.isLowerBound();
+		min = relOp.isLowerBound() || relOp.isMin();
 
 		// get reward info
 		if (model.getNumRewardStructs() == 0)
@@ -680,10 +680,18 @@ public class NondetModelChecker extends NonProbModelChecker
 		mainLog.println("\nBuilding deterministic Rabin automaton (for " + ltl + ")...");
 		long l = System.currentTimeMillis();
 		dra[i] = LTLModelChecker.convertLTLFormulaToDRA(ltl);
-		mainLog.print("\nDRA has " + dra[i].size() + " states, " + ", " + dra[i].getNumAcceptancePairs() + " pairs.");
-		//dra[i].print(System.out);
+		mainLog.print("DRA has " + dra[i].size() + " states, " + ", " + dra[i].getNumAcceptancePairs() + " pairs.");
 		l = System.currentTimeMillis() - l;
-		mainLog.println("\nTime for Rabin translation: " + l / 1000.0 + " seconds.");
+		mainLog.println("Time for Rabin translation: " + l / 1000.0 + " seconds.");
+		// If required, export DRA 
+		if (prism.getSettings().getExportPropAut()) {
+			String exportPropAutFilename = PrismUtils.addCounterSuffixToFilename(prism.getSettings().getExportPropAutFilename(), i);
+			mainLog.println("Exporting DRA to file \"" + exportPropAutFilename + "\"...");
+			PrismLog out = new PrismFileLog(exportPropAutFilename);
+			out.println(dra);
+			out.close();
+			//dra.printDot(new java.io.PrintStream("dra.dot"));
+		}
 
 		// Build product of MDP and automaton
 		mainLog.println("\nConstructing MDP-DRA product...");
@@ -1476,13 +1484,17 @@ public class NondetModelChecker extends NonProbModelChecker
 		mainLog.println("\nBuilding deterministic Rabin automaton (for " + ltl + ")...");
 		l = System.currentTimeMillis();
 		dra = LTLModelChecker.convertLTLFormulaToDRA(ltl);
-		mainLog.println("\nDRA has " + dra.size() + " states, " + dra.getNumAcceptancePairs() + " pairs.");
-		/*try {
-			mainLog.print(dra);
-			dra.printDot(new java.io.PrintStream("dra.dot"));
-		} catch(Exception e) {}*/
+		mainLog.println("DRA has " + dra.size() + " states, " + dra.getNumAcceptancePairs() + " pairs.");
 		l = System.currentTimeMillis() - l;
-		mainLog.println("\nTime for Rabin translation: " + l / 1000.0 + " seconds.");
+		mainLog.println("Time for Rabin translation: " + l / 1000.0 + " seconds.");
+		// If required, export DRA 
+		if (prism.getSettings().getExportPropAut()) {
+			mainLog.println("Exporting DRA to file \"" + prism.getSettings().getExportPropAutFilename() + "\"...");
+			PrismLog out = new PrismFileLog(prism.getSettings().getExportPropAutFilename());
+			out.println(dra);
+			out.close();
+			//dra.printDot(new java.io.PrintStream("dra.dot"));
+		}
 
 		// Build product of MDP and automaton
 		mainLog.println("\nConstructing MDP-DRA product...");
@@ -1507,9 +1519,17 @@ public class NondetModelChecker extends NonProbModelChecker
 			out.close();
 		}
 
-		// Find accepting MECs + compute reachability probabilities
-		mainLog.println("\nFinding accepting end components...");
-		JDDNode acc = mcLtl.findAcceptingECStatesForRabin(dra, modelProduct, draDDRowVars, draDDColVars, fairness);
+		// Find accepting states + compute reachability probabilities
+		JDDNode acc = null;
+		if (dra.isDFA()) {
+			// For a DFA, just collect the accept states
+			mainLog.println("\nSkipping end component detection since DRA is a DFA...");
+			acc = mcLtl.findTargetStatesForRabin(dra, modelProduct, draDDRowVars, draDDColVars);
+		} else {
+			// Usually, we have to detect end components in the product
+			mainLog.println("\nFinding accepting end components...");
+			acc = mcLtl.findAcceptingECStatesForRabin(dra, modelProduct, draDDRowVars, draDDColVars, fairness);
+		}
 		mainLog.println("\nComputing reachability probabilities...");
 		mcProduct = new NondetModelChecker(prism, modelProduct, null);
 		probsProduct = mcProduct.checkProbUntil(modelProduct.getReach(), acc, qual, min && fairness);
@@ -1689,13 +1709,17 @@ public class NondetModelChecker extends NonProbModelChecker
 		mainLog.println("\nBuilding deterministic Rabin automaton (for " + ltl + ")...");
 		l = System.currentTimeMillis();
 		dra = LTLModelChecker.convertLTLFormulaToDRA(ltl);
-		mainLog.println("\nDRA has " + dra.size() + " states, " + dra.getNumAcceptancePairs() + " pairs.");
-		/*try {
-			mainLog.print(dra);
-			dra.printDot(new java.io.PrintStream("dra.dot"));
-		} catch(Exception e) {}*/
+		mainLog.println("DRA has " + dra.size() + " states, " + dra.getNumAcceptancePairs() + " pairs.");
 		l = System.currentTimeMillis() - l;
-		mainLog.println("\nTime for Rabin translation: " + l / 1000.0 + " seconds.");
+		mainLog.println("Time for Rabin translation: " + l / 1000.0 + " seconds.");
+		// If required, export DRA 
+		if (prism.getSettings().getExportPropAut()) {
+			mainLog.println("Exporting DRA to file \"" + prism.getSettings().getExportPropAutFilename() + "\"...");
+			PrismLog out = new PrismFileLog(prism.getSettings().getExportPropAutFilename());
+			out.println(dra);
+			out.close();
+			//dra.printDot(new java.io.PrintStream("dra.dot"));
+		}
 
 		// Build product of MDP and automaton
 		mainLog.println("\nConstructing MDP-DRA product...");
@@ -1728,9 +1752,17 @@ public class NondetModelChecker extends NonProbModelChecker
 		JDD.Ref(modelProduct.getTrans01());
 		JDDNode transRewardsProduct = JDD.Apply(JDD.TIMES, transRewards, modelProduct.getTrans01());
 		
-		// Find accepting MECs + compute expected reachability
-		mainLog.println("\nFinding accepting end components...");
-		JDDNode acc = mcLtl.findAcceptingECStatesForRabin(dra, modelProduct, draDDRowVars, draDDColVars, fairness);
+		// Find accepting states + compute reachability probabilities
+		JDDNode acc = null;
+		if (dra.isDFA()) {
+			// For a DFA, just collect the accept states
+			mainLog.println("\nSkipping end component detection since DRA is a DFA...");
+			acc = mcLtl.findTargetStatesForRabin(dra, modelProduct, draDDRowVars, draDDColVars);
+		} else {
+			// Usually, we have to detect end components in the product
+			mainLog.println("\nFinding accepting end components...");
+			acc = mcLtl.findAcceptingECStatesForRabin(dra, modelProduct, draDDRowVars, draDDColVars, fairness);
+		}
 		mainLog.println("\nComputing reachability probabilities...");
 		mcProduct = new NondetModelChecker(prism, modelProduct, null);
 		rewardsProduct = mcProduct.computeReachRewards(modelProduct.getTrans(), modelProduct.getTransActions(), modelProduct.getTrans01(), stateRewardsProduct, transRewardsProduct, acc, min);

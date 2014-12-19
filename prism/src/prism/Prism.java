@@ -42,8 +42,10 @@ import jdd.JDDNode;
 import jdd.JDDVars;
 import mtbdd.PrismMTBDD;
 import odd.ODDUtils;
+import param.BigRational;
 import param.ModelBuilder;
 import param.ParamModelChecker;
+import param.RegionValues;
 import parser.ExplicitFiles2ModulesFile;
 import parser.PrismParser;
 import parser.State;
@@ -2717,6 +2719,10 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 			return modelCheckPTA(propertiesFile, prop.getExpression(), definedPFConstants);
 		}
 
+		// For exact model checking
+		if (settings.getBoolean(PrismSettings.PRISM_EXACT_ENABLED)) {
+			return modelCheckExact(propertiesFile, prop);
+		}
 		// For fast adaptive uniformisation
 		if (currentModelType == ModelType.CTMC && settings.getString(PrismSettings.PRISM_TRANSIENT_METHOD).equals("Fast adaptive uniformisation")) {
 			FastAdaptiveUniformisationModelChecker fauMC;
@@ -2952,6 +2958,55 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 	}
 
 	/**
+	 * Perform model checking on the currently loaded model using exact methods
+	 * (currently, this is done via the parametric model checking functionality)
+	 * @param propertiesFile parent properties file
+	 * @param prop property to model check
+	 */
+	public Result modelCheckExact(PropertiesFile propertiesFile, Property prop) throws PrismException
+	{
+		// Some checks
+		if (!(currentModelType == ModelType.DTMC || currentModelType == ModelType.CTMC || currentModelType == ModelType.MDP))
+			throw new PrismException("Exact model checking is only supported for DTMCs, CTMCs and MDPs");
+
+		// Set up a dummy parameter (not used)
+		String[] paramNames = new String[] { "dummy" };
+		String[] paramLowerBounds = new String[] { "0" };
+		String[] paramUpperBounds = new String[] { "1" };
+		// And execute parameteric model checking
+		param.ModelBuilder builder = new ModelBuilder(this);
+		builder.setModulesFile(currentModulesFile);
+		builder.setParameters(paramNames, paramLowerBounds, paramUpperBounds);
+		builder.build();
+		explicit.Model modelExpl = builder.getModel();
+		ParamModelChecker mc = new ParamModelChecker(this);
+		mc.setModelBuilder(builder);
+		mc.setParameters(paramNames, paramLowerBounds, paramUpperBounds);
+		mc.setModulesFileAndPropertiesFile(currentModulesFile, propertiesFile);
+		Result result = mc.check(modelExpl, prop.getExpression());
+		
+		// Convert result of parametric model checking to just a rational
+		// There should be just one region since no parameters are used
+		RegionValues regVals = (RegionValues) result.getResult();
+		if (regVals.getNumRegions() != 1)
+			throw new PrismException("Unexpected result from paramteric model checker");
+		param.Function func = regVals.getResult(0).getInitStateValueAsFunction();
+		// Evaluate the function at an arbitrary point (should not depend on parameter values)
+		BigRational rat = func.evaluate(new param.Point(new BigRational[] { new BigRational(0) }));
+		// Restore in result object
+		result.setResult(rat);
+		
+		// Print result to log
+		String resultString = "Result";
+		if (!("Result".equals(prop.getExpression().getResultName())))
+			resultString += " (" + prop.getExpression().getResultName().toLowerCase() + ")";
+		resultString += ": " + result.getResultString();
+		mainLog.print("\n" + resultString);
+		
+		return result;
+	}
+	
+	/**
 	 * Perform parametric model checking on the currently loaded model.
 	 * @param propertiesFile parent properties file
 	 * @param prop property to model check
@@ -2992,7 +3047,16 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 		mc.setModelBuilder(builder);
 		mc.setParameters(paramNames, paramLowerBounds, paramUpperBounds);
 		mc.setModulesFileAndPropertiesFile(currentModulesFile, propertiesFile);
-		return mc.check(modelExpl, prop.getExpression());
+		Result result = mc.check(modelExpl, prop.getExpression());
+		
+		// Print result to log
+		String resultString = "Result";
+		if (!("Result".equals(prop.getExpression().getResultName())))
+			resultString += " (" + prop.getExpression().getResultName().toLowerCase() + ")";
+		resultString += ": " + result.getResultString();
+		mainLog.print("\n" + resultString);
+		
+		return result;
 	}
 	
 	/**
@@ -3062,7 +3126,6 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 	public void doSteadyState(int exportType, File fileOut, File fileIn) throws PrismException
 	{
 		long l = 0; // timer
-		ModelChecker mc = null;
 		StateValues probs = null;
 		explicit.StateValues probsExpl = null;
 		PrismLog tmpLog;
@@ -3086,29 +3149,11 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 		buildModelIfRequired();
 
 		l = System.currentTimeMillis();
-
 		if (!getExplicit()) {
-			if (currentModel.getModelType() == ModelType.DTMC) {
-				mc = new ProbModelChecker(this, currentModel, null);
-				probs = ((ProbModelChecker) mc).doSteadyState(fileIn);
-			} else if (currentModel.getModelType() == ModelType.CTMC) {
-				mc = new StochModelChecker(this, currentModel, null);
-				probs = ((StochModelChecker) mc).doSteadyState(fileIn);
-			} else {
-				throw new PrismException("Steady-state probabilities only computed for DTMCs/CTMCs");
-			}
+			probs = computeSteadyStateProbabilities(currentModel, fileIn);
 		} else {
-			if (currentModelExpl.getModelType() == ModelType.DTMC) {
-				DTMCModelChecker mcDTMC = new DTMCModelChecker(this);
-				probsExpl = mcDTMC.doSteadyState((DTMC) currentModelExpl, (File) null);
-				//TODO: probsExpl = mcDTMC.doSteadyState((DTMC) currentModelExpl, fileIn);
-			} else if (currentModelType == ModelType.CTMC) {
-				throw new PrismException("Not implemented yet");
-			} else {
-				throw new PrismException("Steady-state probabilities only computed for DTMCs/CTMCs");
-			}
+			probsExpl = computeSteadyStateProbabilitiesExplicit(currentModelExpl, fileIn);
 		}
-
 		l = System.currentTimeMillis() - l;
 
 		// print message
@@ -3135,6 +3180,47 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 			probsExpl.clear();
 		if (fileOut != null)
 			tmpLog.close();
+	}
+
+	/**
+	 * Compute steady-state probabilities (for a DTMC or CTMC) using symbolic engines.
+	 * Optionally (if non-null), read in the initial probability distribution from a file.
+	 * If null, start from initial state (or uniform distribution over multiple initial states).
+	 */
+	protected StateValues computeSteadyStateProbabilities(Model model, File fileIn) throws PrismException
+	{
+		ProbModelChecker mc;
+		if (model.getModelType() == ModelType.DTMC) {
+			mc = new ProbModelChecker(this, model, null);
+		}
+		else if (model.getModelType() == ModelType.CTMC) {
+			mc = new StochModelChecker(this, model, null);
+		}
+		else {
+			throw new PrismException("Steady-state probabilities only computed for DTMCs/CTMCs");
+		}
+		return mc.doSteadyState(fileIn);
+	}
+	
+	/**
+	 * Compute steady-state probabilities (for a DTMC or CTMC) using the explicit engine.
+	 * Optionally (if non-null), read in the initial probability distribution from a file.
+	 * If null, start from initial state (or uniform distribution over multiple initial states).
+	 */
+	protected explicit.StateValues computeSteadyStateProbabilitiesExplicit(explicit.Model model, File fileIn) throws PrismException
+	{
+		DTMCModelChecker mcDTMC;
+		explicit.StateValues probs;
+		if (model.getModelType() == ModelType.DTMC) {
+			mcDTMC = new DTMCModelChecker(this);
+			//TODO: probs = mcDTMC.doSteadyState((DTMC) model, fileIn);
+			probs = mcDTMC.doSteadyState((DTMC) model, (File) null);
+		} else if (model.getModelType() == ModelType.CTMC) {
+			throw new PrismException("Not implemented yet");
+		} else {
+			throw new PrismException("Steady-state probabilities only computed for DTMCs/CTMCs");
+		}
+		return probs;
 	}
 
 	/**
