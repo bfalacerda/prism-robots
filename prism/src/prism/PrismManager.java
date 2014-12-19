@@ -179,6 +179,9 @@ public class PrismManager
                 prism.setExportProductTransFilename(directory + timeOfDay + "/prod.tra");
                 prism.setExportTarget(true);
                 prism.setExportTargetFilename(directory + timeOfDay + "/prod.lab");
+                prism.getSettings().setExportPropAut(true);
+                prism.getSettings().setExportPropAutFilename(directory + timeOfDay + "/prod.aut");
+
             } else {
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");
                 prism.setExportProductStates(false);
