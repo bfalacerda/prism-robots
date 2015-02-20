@@ -28,15 +28,18 @@ package explicit;
 
 import java.util.BitSet;
 
+import parser.ast.Coalition;
 import parser.ast.Expression;
 import parser.ast.ExpressionProb;
 import parser.ast.ExpressionReward;
 import parser.ast.ExpressionSS;
+import parser.ast.ExpressionStrategy;
 import parser.ast.ExpressionTemporal;
 import parser.ast.ExpressionUnaryOp;
-import parser.ast.RelOp;
 import parser.ast.RewardStruct;
 import parser.type.TypeDouble;
+import prism.IntegerBound;
+import prism.OpRelOpBound;
 import prism.PrismComponent;
 import prism.PrismException;
 import prism.PrismSettings;
@@ -438,13 +441,13 @@ public class ProbModelChecker extends NonProbModelChecker
 	// Model checking functions
 
 	@Override
-	public StateValues checkExpression(Model model, Expression expr) throws PrismException
+	public StateValues checkExpression(Model model, Expression expr, BitSet statesOfInterest) throws PrismException
 	{
 		StateValues res;
 
 		// P operator
 		if (expr instanceof ExpressionProb) {
-			res = checkExpressionProb(model, (ExpressionProb) expr);
+			res = checkExpressionProb(model, (ExpressionProb) expr, statesOfInterest);
 		}
 		// R operator
 		else if (expr instanceof ExpressionReward) {
@@ -454,36 +457,80 @@ public class ProbModelChecker extends NonProbModelChecker
 		else if (expr instanceof ExpressionSS) {
 			res = checkExpressionSteadyState(model, (ExpressionSS) expr);
 		}
+		// <<>> operator
+		else if (expr instanceof ExpressionStrategy) {
+			res = checkExpressionStrategy(model, (ExpressionStrategy) expr, statesOfInterest);
+		}
 		// Otherwise, use the superclass
 		else {
-			res = super.checkExpression(model, expr);
+			res = super.checkExpression(model, expr, statesOfInterest);
 		}
 
 		return res;
 	}
 
 	/**
-	 * Model check a P operator expression and return the values for all states.
+	 * Model check a <<>> or [[]] operator expression and return the values for the statesOfInterest.
+	 * * @param statesOfInterest the states of interest, see checkExpression()
 	 */
-	protected StateValues checkExpressionProb(Model model, ExpressionProb expr) throws PrismException
+	protected StateValues checkExpressionStrategy(Model model, ExpressionStrategy expr, BitSet statesOfInterest) throws PrismException
 	{
-		Expression pb; // Probability bound (expression)
-		double p = 0; // Probability bound (actual value)
-		RelOp relOp; // Relational operator
-		StateValues probs = null;
+		// Only support <<>> right now, not [[]]
+		if (!expr.isThereExists())
+			throw new PrismException("The " + expr.getOperatorString() + " operator is not yet supported");
 
-		// Get info from P operator
-		relOp = expr.getRelOp();
-		pb = expr.getProb();
-		if (pb != null) {
-			p = pb.evaluateDouble(constantValues);
-			if (p < 0 || p > 1)
-				throw new PrismException("Invalid probability bound " + p + " in P operator");
+		// Only support <<>> for MDPs right now
+		if (!(this instanceof MDPModelChecker))
+			throw new PrismException("The " + expr.getOperatorString() + " operator is only supported for MDPs currently");
+
+		// Extract coalition info
+		Coalition coalition = expr.getCoalition();
+		// Strip any parentheses (they might have been needless wrapped around a single P or R)
+		Expression exprSub = expr.getExpression();
+		while (Expression.isParenth(exprSub))
+			exprSub = ((ExpressionUnaryOp) exprSub).getOperand();
+		// Pass onto relevant method:
+		// P operator
+		if (exprSub instanceof ExpressionProb) {
+			return checkExpressionProb(model, (ExpressionProb) exprSub, false, coalition, statesOfInterest);
 		}
+		// R operator
+		else if (exprSub instanceof ExpressionReward) {
+			return checkExpressionReward(model, (ExpressionReward) exprSub, false, coalition);
+		}
+		// Anything else is an error 
+		else {
+			throw new PrismException("Unexpected operators in " + expr.getOperatorString() + " operator");
+		}
+	}
+
+	/**
+	 * Model check a P operator expression and return the values for the statesOfInterest.
+ 	 * @param statesOfInterest the states of interest, see checkExpression()
+	 */
+	protected StateValues checkExpressionProb(Model model, ExpressionProb expr, BitSet statesOfInterest) throws PrismException
+	{
+		// Use the default semantics for a standalone P operator
+		// (i.e. quantification over all strategies, and no game-coalition info)
+		return checkExpressionProb(model, expr, true, null, statesOfInterest);
+	}
+	
+	/**
+	 * Model check a P operator expression and return the values for the states of interest.
+	 * @param model The model
+	 * @param expr The P operator expression
+	 * @param forAll Are we checking "for all strategies" (true) or "there exists a strategy" (false)? [irrelevant for numerical (=?) queries] 
+	 * @param coalition If relevant, info about which set of players this P operator refers to
+	 * @param statesOfInterest the states of interest, see checkExpression()
+	 */
+	protected StateValues checkExpressionProb(Model model, ExpressionProb expr, boolean forAll, Coalition coalition, BitSet statesOfInterest) throws PrismException
+	{
+		// Get info from P operator
+		OpRelOpBound opInfo = expr.getRelopBoundInfo(constantValues);
+		MinMax minMax = opInfo.getMinMax(model.getModelType());
 
 		// Compute probabilities
-		MinMax minMax = (relOp.isLowerBound() || relOp.isMin()) ? MinMax.min() : MinMax.max();
-		probs = checkProbPathFormula(model, expr.getExpression(), minMax);
+		StateValues probs = checkProbPathFormula(model, expr.getExpression(), minMax, statesOfInterest);
 
 		// Print out probabilities
 		if (getVerbosity() > 5) {
@@ -492,12 +539,12 @@ public class ProbModelChecker extends NonProbModelChecker
 		}
 
 		// For =? properties, just return values
-		if (pb == null) {
+		if (opInfo.isNumeric()) {
 			return probs;
 		}
 		// Otherwise, compare against bound to get set of satisfying states
 		else {
-			BitSet sol = probs.getBitSetFromInterval(relOp, p);
+			BitSet sol = probs.getBitSetFromInterval(opInfo.getRelOp(), opInfo.getBound());
 			probs.clear();
 			return StateValues.createFromBitSet(sol, model);
 		}
@@ -505,64 +552,72 @@ public class ProbModelChecker extends NonProbModelChecker
 
 	/**
 	 * Compute probabilities for the contents of a P operator.
+	 * @param statesOfInterest the states of interest, see checkExpression()
 	 */
-	protected StateValues checkProbPathFormula(Model model, Expression expr, MinMax minMax) throws PrismException
+	protected StateValues checkProbPathFormula(Model model, Expression expr, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
 		// Test whether this is a simple path formula (i.e. PCTL)
-		// and then pass control to appropriate method. 
-		if (expr.isSimplePathFormula()) {
-			return checkProbPathFormulaSimple(model, expr, minMax);
+		// and whether we want to use the corresponding algorithms
+		boolean useSimplePathAlgo = expr.isSimplePathFormula();
+
+		if (useSimplePathAlgo &&
+		    settings.getBoolean(PrismSettings.PRISM_PATH_VIA_AUTOMATA) &&
+		    LTLModelChecker.isSupportedLTLFormula(model.getModelType(), expr)) {
+			// If PRISM_PATH_VIA_AUTOMATA is true, we want to use the LTL engine
+			// whenever possible
+			useSimplePathAlgo = false;
+		}
+
+		if (useSimplePathAlgo) {
+			return checkProbPathFormulaSimple(model, expr, minMax, statesOfInterest);
 		} else {
-			return checkProbPathFormulaLTL(model, expr, false, minMax);
+			return checkProbPathFormulaLTL(model, expr, false, minMax, statesOfInterest);
 		}
 	}
 
 	/**
 	 * Compute probabilities for a simple, non-LTL path operator.
 	 */
-	protected StateValues checkProbPathFormulaSimple(Model model, Expression expr, MinMax minMax) throws PrismException
+	protected StateValues checkProbPathFormulaSimple(Model model, Expression expr, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
+		boolean negated = false;
 		StateValues probs = null;
 
-		// Negation/parentheses
-		if (expr instanceof ExpressionUnaryOp) {
-			ExpressionUnaryOp exprUnary = (ExpressionUnaryOp) expr;
-			// Parentheses
-			if (exprUnary.getOperator() == ExpressionUnaryOp.PARENTH) {
-				// Recurse
-				probs = checkProbPathFormulaSimple(model, exprUnary.getOperand(), minMax);
-			}
-			// Negation
-			else if (exprUnary.getOperator() == ExpressionUnaryOp.NOT) {
-				// Compute, then subtract from 1 
-				probs = checkProbPathFormulaSimple(model, exprUnary.getOperand(), minMax.negate());
-				probs.timesConstant(-1.0);
-				probs.plusConstant(1.0);
-			}
+		expr = Expression.convertSimplePathFormulaToCanonicalForm(expr);
+
+		// Negation
+		if (expr instanceof ExpressionUnaryOp &&
+		    ((ExpressionUnaryOp)expr).getOperator() == ExpressionUnaryOp.NOT) {
+			negated = true;
+			minMax = minMax.negate();
+			expr = ((ExpressionUnaryOp)expr).getOperand();
 		}
-		// Temporal operators
-		else if (expr instanceof ExpressionTemporal) {
-			ExpressionTemporal exprTemp = (ExpressionTemporal) expr;
+
+		if (expr instanceof ExpressionTemporal) {
+ 			ExpressionTemporal exprTemp = (ExpressionTemporal) expr;
+
 			// Next
 			if (exprTemp.getOperator() == ExpressionTemporal.P_X) {
-				probs = checkProbNext(model, exprTemp, minMax);
+				probs = checkProbNext(model, exprTemp, minMax, statesOfInterest);
 			}
 			// Until
 			else if (exprTemp.getOperator() == ExpressionTemporal.P_U) {
 				if (exprTemp.hasBounds()) {
-					probs = checkProbBoundedUntil(model, exprTemp, minMax);
+					probs = checkProbBoundedUntil(model, exprTemp, minMax, statesOfInterest);
 				} else {
-					probs = checkProbUntil(model, exprTemp, minMax);
+					probs = checkProbUntil(model, exprTemp, minMax, statesOfInterest);
 				}
-			}
-			// Anything else - convert to until and recurse
-			else {
-				probs = checkProbPathFormulaSimple(model, exprTemp.convertToUntilForm(), minMax);
 			}
 		}
 
 		if (probs == null)
 			throw new PrismException("Unrecognised path operator in P operator");
+
+		if (negated) {
+			// Subtract from 1 for negation
+			probs.timesConstant(-1.0);
+			probs.plusConstant(1.0);
+		}
 
 		return probs;
 	}
@@ -570,10 +625,10 @@ public class ProbModelChecker extends NonProbModelChecker
 	/**
 	 * Compute probabilities for a next operator.
 	 */
-	protected StateValues checkProbNext(Model model, ExpressionTemporal expr, MinMax minMax) throws PrismException
+	protected StateValues checkProbNext(Model model, ExpressionTemporal expr, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
-		// Model check the operand
-		BitSet target = checkExpression(model, expr.getOperand2()).getBitSet();
+		// Model check the operand for all states
+		BitSet target = checkExpression(model, expr.getOperand2(), null).getBitSet();
 
 		// Compute/return the probabilities
 		ModelCheckerResult res = null;
@@ -599,55 +654,115 @@ public class ProbModelChecker extends NonProbModelChecker
 	/**
 	 * Compute probabilities for a bounded until operator.
 	 */
-	protected StateValues checkProbBoundedUntil(Model model, ExpressionTemporal expr, MinMax minMax) throws PrismException
+	protected StateValues checkProbBoundedUntil(Model model, ExpressionTemporal expr, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
 		// This method just handles discrete time
 		// Continuous-time model checkers will override this method
 
 		// Get info from bounded until
-		int time = expr.getUpperBound().evaluateInt(constantValues);
-		if (expr.upperBoundIsStrict())
-			time--;
-		if (time < 0) {
-			String bound = expr.upperBoundIsStrict() ? "<" + (time + 1) : "<=" + time;
-			throw new PrismException("Invalid bound " + bound + " in bounded until formula");
+		Integer lowerBound;
+		IntegerBound bounds;
+		int i;
+
+		// get and check bounds information
+		bounds = IntegerBound.fromExpressionTemporal(expr, constantValues, true);
+
+		// Model check operands for all states
+		BitSet remain = checkExpression(model, expr.getOperand1(), null).getBitSet();
+		BitSet target = checkExpression(model, expr.getOperand2(), null).getBitSet();
+
+		if (bounds.hasLowerBound()) {
+			lowerBound = bounds.getLowestInteger();
+		} else {
+			lowerBound = 0;
 		}
 
-		// Model check operands
-		BitSet remain = checkExpression(model, expr.getOperand1()).getBitSet();
-		BitSet target = checkExpression(model, expr.getOperand2()).getBitSet();
+		Integer windowSize = null;  // unbounded
 
-		// Compute/return the probabilities
-		// A trivial case: "U<=0" (prob is 1 in target states, 0 otherwise)
-		if (time == 0) {
-			return StateValues.createFromBitSetAsDoubles(target, model);
+		if (bounds.hasUpperBound()) {
+			windowSize = bounds.getHighestInteger() - lowerBound;
 		}
-		// Otherwise: numerical solution
-		ModelCheckerResult res = null;
-		switch (model.getModelType()) {
-		case DTMC:
-			res = ((DTMCModelChecker) this).computeBoundedUntilProbs((DTMC) model, remain, target, time);
-			break;
-		case MDP:
-			res = ((MDPModelChecker) this).computeBoundedUntilProbs((MDP) model, remain, target, time, minMax.isMin());
-			break;
-		case STPG:
-			res = ((STPGModelChecker) this).computeBoundedUntilProbs((STPG) model, remain, target, time, minMax.isMin1(), minMax.isMin2());
-			break;
-		default:
-			throw new PrismException("Cannot model check " + expr + " for " + model.getModelType() + "s");
+
+		// compute probabilities for Until<=windowSize
+		StateValues sv = null;
+
+		if (windowSize == null) {
+			// unbounded
+			ModelCheckerResult res = null;
+
+			switch (model.getModelType()) {
+			case DTMC:
+				res = ((DTMCModelChecker) this).computeUntilProbs((DTMC) model, remain, target);
+				break;
+			case MDP:
+				res = ((MDPModelChecker) this).computeUntilProbs((MDP) model, remain, target, minMax.isMin());
+				break;
+			case STPG:
+				res = ((STPGModelChecker) this).computeUntilProbs((STPG) model, remain, target, minMax.isMin1(), minMax.isMin2());
+				break;
+			default:
+				throw new PrismException("Cannot model check " + expr + " for " + model.getModelType() + "s");
+			}
+
+			sv = StateValues.createFromDoubleArray(res.soln, model);
+		} else if (windowSize == 0) {
+			// A trivial case: windowSize=0 (prob is 1 in target states, 0 otherwise)
+			sv = StateValues.createFromBitSetAsDoubles(target, model);
+		} else {
+			// Otherwise: numerical solution
+			ModelCheckerResult res = null;
+
+			switch (model.getModelType()) {
+			case DTMC:
+				res = ((DTMCModelChecker) this).computeBoundedUntilProbs((DTMC) model, remain, target, windowSize);
+				break;
+			case MDP:
+				res = ((MDPModelChecker) this).computeBoundedUntilProbs((MDP) model, remain, target, windowSize, minMax.isMin());
+				break;
+			case STPG:
+				res = ((STPGModelChecker) this).computeBoundedUntilProbs((STPG) model, remain, target, windowSize, minMax.isMin1(), minMax.isMin2());
+				break;
+			default:
+				throw new PrismException("Cannot model check " + expr + " for " + model.getModelType() + "s");
+			}
+			sv = StateValues.createFromDoubleArray(res.soln, model);
 		}
-		return StateValues.createFromDoubleArray(res.soln, model);
+
+		// perform lowerBound restricted next-step computations to
+		// deal with lower bound.
+		if (lowerBound > 0) {
+			double[] probs = sv.getDoubleArray();
+
+			for (i = 0; i < lowerBound; i++) {
+				switch (model.getModelType()) {
+				case DTMC:
+					probs = ((DTMCModelChecker) this).computeRestrictedNext((DTMC) model, remain, probs);
+					break;
+				case MDP:
+					probs = ((MDPModelChecker) this).computeRestrictedNext((MDP) model, remain, probs, minMax.isMin());
+					break;
+				case STPG:
+					// TODO (JK): Figure out if we can handle lower bounds for STPG in the same way
+					throw new PrismException("Lower bounds not yet supported for STPGModelChecker");
+				default:
+					throw new PrismException("Cannot model check " + expr + " for " + model.getModelType() + "s");
+				}
+			}
+
+			sv = StateValues.createFromDoubleArray(probs, model);
+		}
+
+		return sv;
 	}
 
 	/**
 	 * Compute probabilities for an (unbounded) until operator.
 	 */
-	protected StateValues checkProbUntil(Model model, ExpressionTemporal expr, MinMax minMax) throws PrismException
+	protected StateValues checkProbUntil(Model model, ExpressionTemporal expr, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
-		// Model check operands
-		BitSet remain = checkExpression(model, expr.getOperand1()).getBitSet();
-		BitSet target = checkExpression(model, expr.getOperand2()).getBitSet();
+		// Model check operands for all states
+		BitSet remain = checkExpression(model, expr.getOperand1(), null).getBitSet();
+		BitSet target = checkExpression(model, expr.getOperand2(), null).getBitSet();
 
 		// Compute/return the probabilities
 		ModelCheckerResult res = null;
@@ -674,40 +789,36 @@ public class ProbModelChecker extends NonProbModelChecker
 	/**
 	 * Compute probabilities for an LTL path formula
 	 */
-	protected StateValues checkProbPathFormulaLTL(Model model, Expression expr, boolean qual, MinMax minMax) throws PrismException
+	protected StateValues checkProbPathFormulaLTL(Model model, Expression expr, boolean qual, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
 		// To be overridden by subclasses
 		throw new PrismException("Computation not implemented yet");
 	}
 
 	/**
-	 * Model check an R operator expression and return the values for all states.
+	 * Model check a P operator expression and return the values for all states.
 	 */
 	protected StateValues checkExpressionReward(Model model, ExpressionReward expr) throws PrismException
 	{
-		Expression rb; // Reward bound (expression)
-		double r = 0; // Reward bound (actual value)
-		RelOp relOp; // Relational operator
-		StateValues rews = null;
-		Rewards rewards = null;
-
+		return checkExpressionReward(model, expr, true, null);
+	}
+	
+	/**
+	 * Model check an R operator expression and return the values for all states.
+	 */
+	protected StateValues checkExpressionReward(Model model, ExpressionReward expr, boolean forAll, Coalition coalition) throws PrismException
+	{
 		// Get info from R operator
-		RewardStruct rewStruct = expr.getRewardStructByIndexObject(modulesFile, constantValues);
-		relOp = expr.getRelOp();
-		rb = expr.getReward();
-		if (rb != null) {
-			r = rb.evaluateDouble(constantValues);
-			if (r < 0)
-				throw new PrismException("Invalid reward bound " + r + " in R[] formula");
-		}
+		OpRelOpBound opInfo = expr.getRelopBoundInfo(constantValues);
+		MinMax minMax = opInfo.getMinMax(model.getModelType());
 
 		// Build rewards
+		RewardStruct rewStruct = expr.getRewardStructByIndexObject(modulesFile, constantValues);
 		mainLog.println("Building reward structure...");
-		rewards = constructRewards(model, rewStruct);
+		Rewards rewards = constructRewards(model, rewStruct);
 
 		// Compute rewards
-		MinMax minMax = (relOp.isLowerBound() || relOp.isMin()) ? MinMax.min() : MinMax.max();
-		rews = checkRewardFormula(model, rewards, expr.getExpression(), minMax);
+		StateValues rews = checkRewardFormula(model, rewards, expr.getExpression(), minMax);
 
 		// Print out rewards
 		if (getVerbosity() > 5) {
@@ -716,12 +827,12 @@ public class ProbModelChecker extends NonProbModelChecker
 		}
 
 		// For =? properties, just return values
-		if (rb == null) {
+		if (opInfo.isNumeric()) {
 			return rews;
 		}
 		// Otherwise, compare against bound to get set of satisfying states
 		else {
-			BitSet sol = rews.getBitSetFromInterval(relOp, r);
+			BitSet sol = rews.getBitSetFromInterval(opInfo.getRelOp(), opInfo.getBound());
 			rews.clear();
 			return StateValues.createFromBitSet(sol, model);
 		}
@@ -783,8 +894,8 @@ public class ProbModelChecker extends NonProbModelChecker
 	 */
 	protected StateValues checkRewardReach(Model model, Rewards modelRewards, ExpressionTemporal expr, MinMax minMax) throws PrismException
 	{
-		// Model check the operand
-		BitSet target = checkExpression(model, expr.getOperand2()).getBitSet();
+		// Model check the operand for all states
+		BitSet target = checkExpression(model, expr.getOperand2(), null).getBitSet();
 
 		// Compute/return the rewards
 		ModelCheckerResult res = null;
@@ -889,23 +1000,12 @@ public class ProbModelChecker extends NonProbModelChecker
 	 */
 	protected StateValues checkExpressionSteadyState(Model model, ExpressionSS expr) throws PrismException
 	{
-		Expression pb; // Probability bound (expression)
-		double p = 0; // Probability bound (actual value)
-		RelOp relOp; // Relational operator
-		StateValues probs = null;
-
 		// Get info from S operator
-		relOp = expr.getRelOp();
-		pb = expr.getProb();
-		if (pb != null) {
-			p = pb.evaluateDouble(constantValues);
-			if (p < 0 || p > 1)
-				throw new PrismException("Invalid probability bound " + p + " in P operator");
-		}
+		OpRelOpBound opInfo = expr.getRelopBoundInfo(constantValues);
+		MinMax minMax = opInfo.getMinMax(model.getModelType());
 
 		// Compute probabilities
-		MinMax minMax = (relOp.isLowerBound() || relOp.isMin()) ? MinMax.min() : MinMax.max();
-		probs = checkSteadyStateFormula(model, expr.getExpression(), minMax);
+		StateValues probs = checkSteadyStateFormula(model, expr.getExpression(), minMax);
 
 		// Print out probabilities
 		if (getVerbosity() > 5) {
@@ -914,12 +1014,12 @@ public class ProbModelChecker extends NonProbModelChecker
 		}
 
 		// For =? properties, just return values
-		if (pb == null) {
+		if (opInfo.isNumeric()) {
 			return probs;
 		}
 		// Otherwise, compare against bound to get set of satisfying states
 		else {
-			BitSet sol = probs.getBitSetFromInterval(relOp, p);
+			BitSet sol = probs.getBitSetFromInterval(opInfo.getRelOp(), opInfo.getBound());
 			probs.clear();
 			return StateValues.createFromBitSet(sol, model);
 		}
@@ -930,8 +1030,8 @@ public class ProbModelChecker extends NonProbModelChecker
 	 */
 	protected StateValues checkSteadyStateFormula(Model model, Expression expr, MinMax minMax) throws PrismException
 	{
-		// Model check operand
-		BitSet b = checkExpression(model, expr).getBitSet();
+		// Model check operand for all states
+		BitSet b = checkExpression(model, expr, null).getBitSet();
 
 		// Compute/return the probabilities
 		ModelCheckerResult res = null;

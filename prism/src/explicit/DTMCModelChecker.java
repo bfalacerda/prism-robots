@@ -30,16 +30,13 @@ import java.io.File;
 import java.util.BitSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Vector;
 
+import acceptance.AcceptanceReach;
+import acceptance.AcceptanceType;
 import parser.ast.Expression;
 import parser.type.TypeDouble;
-import prism.DRA;
-import prism.Pair;
 import prism.PrismComponent;
 import prism.PrismException;
-import prism.PrismFileLog;
-import prism.PrismLog;
 import prism.PrismUtils;
 import explicit.rewards.MCRewards;
 
@@ -59,80 +56,39 @@ public class DTMCModelChecker extends ProbModelChecker
 	// Model checking functions
 
 	@Override
-	protected StateValues checkProbPathFormulaLTL(Model model, Expression expr, boolean qual, MinMax minMax) throws PrismException
+	protected StateValues checkProbPathFormulaLTL(Model model, Expression expr, boolean qual, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
 		LTLModelChecker mcLtl;
 		StateValues probsProduct, probs;
-		Expression ltl;
-		DRA<BitSet> dra;
-		Model modelProduct;
+		LTLModelChecker.LTLProduct<DTMC> product;
 		DTMCModelChecker mcProduct;
-		long time;
-
-		// Can't do LTL with time-bounded variants of the temporal operators
-		if (Expression.containsTemporalTimeBounds(expr)) {
-			throw new PrismException("Time-bounded operators not supported in LTL: " + expr);
-		}
 
 		// For LTL model checking routines
 		mcLtl = new LTLModelChecker(this);
 
-		// Model check maximal state formulas
-		Vector<BitSet> labelBS = new Vector<BitSet>();
-		ltl = mcLtl.checkMaximalStateFormulas(this, model, expr.deepCopy(), labelBS);
-
-		// Convert LTL formula to deterministic Rabin automaton (DRA)
-		mainLog.println("\nBuilding deterministic Rabin automaton (for " + ltl + ")...");
-		time = System.currentTimeMillis();
-		dra = LTLModelChecker.convertLTLFormulaToDRA(ltl);
-		int draSize = dra.size();
-		mainLog.println("DRA has " + dra.size() + " states, " + dra.getNumAcceptancePairs() + " pairs.");
-		time = System.currentTimeMillis() - time;
-		mainLog.println("Time for Rabin translation: " + time / 1000.0 + " seconds.");
-		// If required, export DRA 
-		if (settings.getExportPropAut()) {
-			mainLog.println("Exporting DRA to file \"" + settings.getExportPropAutFilename() + "\"...");
-			PrismLog out = new PrismFileLog(settings.getExportPropAutFilename());
-			out.println(dra);
-			out.close();
-			//dra.printDot(new java.io.PrintStream("dra.dot"));
-		}
-
 		// Build product of Markov chain and automaton
-		mainLog.println("\nConstructing MC-DRA product...");
-		Pair<Model, int[]> pair = mcLtl.constructProductMC(dra, (DTMC) model, labelBS);
-		modelProduct = pair.first;
-		int invMap[] = pair.second;
-		mainLog.print("\n" + modelProduct.infoStringTable());
+		AcceptanceType[] allowedAcceptance = {
+				AcceptanceType.RABIN,
+				AcceptanceType.REACH
+		};
+		product = mcLtl.constructProductMC(this, (DTMC)model, expr, statesOfInterest, allowedAcceptance);
 
 		// Find accepting states + compute reachability probabilities
-		BitSet acc = null;
-		if (dra.isDFA()) {
-			// For a DFA, just collect the accept states
-			mainLog.println("\nSkipping BSCC detection since DRA is a DFA...");
-			acc = mcLtl.findTargetStatesForRabin(dra, modelProduct, invMap);
+		BitSet acc;
+		if (product.getAcceptance() instanceof AcceptanceReach) {
+			mainLog.println("\nSkipping BSCC computation since acceptance is defined via goal states...");
+			acc = ((AcceptanceReach)product.getAcceptance()).getGoalStates();
 		} else {
-			// Usually, we have to detect BSCCs in the product
 			mainLog.println("\nFinding accepting BSCCs...");
-			acc = mcLtl.findAcceptingBSCCsForRabin(dra, modelProduct, invMap);
+			acc = mcLtl.findAcceptingBSCCs(product.getProductModel(), product.getAcceptance());
 		}
 		mainLog.println("\nComputing reachability probabilities...");
 		mcProduct = new DTMCModelChecker(this);
 		mcProduct.inheritSettings(this);
-		probsProduct = StateValues.createFromDoubleArray(mcProduct.computeReachProbs((DTMC) modelProduct, acc).soln, modelProduct);
+		probsProduct = StateValues.createFromDoubleArray(mcProduct.computeReachProbs(product.getProductModel(), acc).soln, product.getProductModel());
 
 		// Mapping probabilities in the original model
-		double[] probsProductDbl = probsProduct.getDoubleArray();
-		double[] probsDbl = new double[model.getNumStates()];
-
-		// Get the probabilities for the original model by taking the initial states
-		// of the product and projecting back to the states of the original model
-		for (int i : modelProduct.getInitialStates()) {
-			int s = invMap[i] / draSize;
-			probsDbl[s] = probsProductDbl[i];
-		}
-
-		probs = StateValues.createFromDoubleArray(probsDbl, model);
+		probs = product.projectToOriginalModel(probsProduct);
 		probsProduct.clear();
 
 		return probs;
@@ -360,6 +316,33 @@ public class DTMCModelChecker extends ProbModelChecker
 		res.numIters = 1;
 		res.timeTaken = timer / 1000.0;
 		return res;
+	}
+
+	/**
+	 * Given a value vector x, compute the probability:
+	 *   v(s) = Sum_s' P(s,s')*x(s')   for s labeled with a,
+	 *   v(s) = 0                      for s not labeled with a.
+	 *
+	 * @param dtmc the DTMC model
+	 * @param a the set of states labeled with a
+	 * @param x the value vector
+	 */
+	protected double[] computeRestrictedNext(DTMC dtmc, BitSet a, double[] x)
+	{
+		double[] soln;
+		int n;
+
+		// Store num states
+		n = dtmc.getNumStates();
+
+		// initialized to 0.0
+		soln = new double[n];
+
+		// Next-step probabilities multiplication
+		// restricted to a states
+		dtmc.mvMult(x, soln, a, false);
+
+		return soln;
 	}
 
 	/**

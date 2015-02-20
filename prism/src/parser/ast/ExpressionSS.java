@@ -26,11 +26,14 @@
 
 package parser.ast;
 
-import parser.*;
-import parser.visitor.*;
+import parser.EvaluateContext;
+import parser.Values;
+import parser.visitor.ASTVisitor;
+import prism.OpRelOpBound;
+import prism.PrismException;
 import prism.PrismLangException;
 
-public class ExpressionSS extends Expression
+public class ExpressionSS extends Expression implements ExpressionQuant
 {
 	RelOp relOp = null;
 	Expression prob = null;
@@ -101,6 +104,23 @@ public class ExpressionSS extends Expression
 		return filter;
 	}
 
+	/**
+	 * Get info about the operator and bound.
+	 * Does some checks, e.g., throws an exception if probability is out of range.
+	 * @param constantValues Values for constants in order to evaluate any bound
+	 */
+	public OpRelOpBound getRelopBoundInfo(Values constantValues) throws PrismException
+	{
+		if (prob != null) {
+			double bound = prob.evaluateDouble(constantValues);
+			if (bound < 0 || bound > 1)
+				throw new PrismException("Invalid probability bound " + bound + " in P operator");
+			return new OpRelOpBound("S", relOp, bound);
+		} else {
+			return new OpRelOpBound("S", relOp, null);
+		}
+	}
+	
 	// Methods required for Expression:
 	
 	/**

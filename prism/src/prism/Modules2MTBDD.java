@@ -2026,12 +2026,12 @@ public class Modules2MTBDD
 					// restrict rewards to relevant states
 					item = JDD.Apply(JDD.TIMES, states, rewards);
 					// check for negative rewards
-					if ((d = JDD.FindMin(item)) < 0) {
+					/*if ((d = JDD.FindMin(item)) < 0) {
 						s = "Reward structure item contains negative rewards (" + d + ").";
 						s += "\nNote that these may correspond to states which are unreachable.";
 						s += "\nIf this is the case, try strengthening the predicate.";
 						throw new PrismLangException(s, rs.getRewardStructItem(i));
-					}
+					}*/
 					// add to state rewards
 					stateRewards[j] = JDD.Apply(JDD.PLUS, stateRewards[j], item);
 				}
@@ -2059,12 +2059,12 @@ public class Modules2MTBDD
 					// multiply by reward values
 					item = JDD.Apply(JDD.TIMES, item, rewards);
 					// check for negative rewards
-					if ((d = JDD.FindMin(item)) < 0) {
+					/*if ((d = JDD.FindMin(item)) < 0) {
 						s = "Reward structure item contains negative rewards (" + d + ").";
 						s += "\nNote that these may correspond to states which are unreachable.";
 						s += "\nIf this is the case, try strengthening the predicate.";
 						throw new PrismLangException(s, rs.getRewardStructItem(i));
-					}
+					}*/
 					// add result to rewards
 					compDDs.rewards[j] = JDD.Apply(JDD.PLUS, compDDs.rewards[j], item);
 				}

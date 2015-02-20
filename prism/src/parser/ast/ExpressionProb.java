@@ -27,10 +27,13 @@
 package parser.ast;
 
 import parser.EvaluateContext;
+import parser.Values;
 import parser.visitor.ASTVisitor;
+import prism.OpRelOpBound;
+import prism.PrismException;
 import prism.PrismLangException;
 
-public class ExpressionProb extends Expression
+public class ExpressionProb extends Expression implements ExpressionQuant
 {
 	RelOp relOp = null;
 	Expression prob = null;
@@ -101,6 +104,34 @@ public class ExpressionProb extends Expression
 		return filter;
 	}
 
+	/**
+	 * Get a string describing the type of P operator, e.g. "P=?" or "P<p".
+	 */
+	public String getTypeOfPOperator()
+	{
+		String s = "";
+		s += "P" + relOp;
+		s += (prob == null) ? "?" : "p";
+		return s;
+	}
+
+	/**
+	 * Get info about the operator and bound.
+	 * Does some checks, e.g., throws an exception if probability is out of range.
+	 * @param constantValues Values for constants in order to evaluate any bound
+	 */
+	public OpRelOpBound getRelopBoundInfo(Values constantValues) throws PrismException
+	{
+		if (prob != null) {
+			double bound = prob.evaluateDouble(constantValues);
+			if (bound < 0 || bound > 1)
+				throw new PrismException("Invalid probability bound " + bound + " in P operator");
+			return new OpRelOpBound("P", relOp, bound);
+		} else {
+			return new OpRelOpBound("P", relOp, null);
+		}
+	}
+	
 	// Methods required for Expression:
 
 	/**
