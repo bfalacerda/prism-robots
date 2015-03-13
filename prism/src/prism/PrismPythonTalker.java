@@ -126,20 +126,24 @@ public class PrismPythonTalker
                 prism.setExportTargetFilename(directory +  "/prod.lab");
                 prism.getSettings().setExportPropAut(true);
                 prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
-
             } else {
-                prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");
+                prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");               
                 prism.setExportProductStates(false);
                 prism.setExportProductTrans(false);
                 prism.setExportTarget(false);
             }
             loadPrismModelFile();
+            prism.exportStatesToFile(Prism.EXPORT_PLAIN, new File(directory + "original.sta"));
             prismSpec=prism.parsePropertiesString(currentModel, ltlString);
             result = prism.modelCheck(prismSpec, prismSpec.getPropertyObject(0));
             return result;
         }
         catch (PrismException e) {
             System.out.println("Error: " + e.getMessage());
+            return null;
+        }
+        catch (FileNotFoundException e) {
+            System.out.println("File not found Error: " + e.getMessage());
             return null;
         }
     }
