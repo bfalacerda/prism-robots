@@ -30,13 +30,17 @@ import java.util.BitSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Vector;
 
+import acceptance.AcceptanceOmega;
 import acceptance.AcceptanceReach;
 import acceptance.AcceptanceType;
 import parser.ast.Expression;
 import parser.ast.ExpressionFunc;
 import parser.ast.ExpressionProb;
 import parser.type.TypeInt;
+import prism.DA;
+import prism.DALabelsPair;
 import prism.PrismComponent;
 import prism.PrismDevNullLog;
 import prism.PrismException;
@@ -76,11 +80,34 @@ public class MDPModelChecker extends ProbModelChecker
 
 	protected StateValues checkIJCAI(Model model, ExpressionFunc expr, BitSet statesOfInterest) throws PrismException
 	{
+		LTLModelChecker mcLtl;
+		LTLModelChecker.LTLProduct<MDP> product;
+		DALabelsPair daLabelsPair;
+		DA<BitSet, ? extends AcceptanceOmega> da;
+		Vector<BitSet> labelBS;
+		
+		
+		// For LTL model checking routines
+		mcLtl = new LTLModelChecker(this);
 		System.out.println("\nIJCAI stuff goes here...");
 		System.out.println("arg 1: " + expr.getOperand(0));
 		
 		ExpressionProb exprProb = (ExpressionProb) expr.getOperand(0);
 		Expression ltl = exprProb.getExpression();
+		System.out.println("ltl: " + ltl);
+		
+		AcceptanceType[] allowedAcceptance = {
+				AcceptanceType.RABIN,
+				AcceptanceType.REACH
+		};
+		daLabelsPair = mcLtl.constructDA(this, (MDP)model, ltl, allowedAcceptance);
+		da = daLabelsPair.getDA();
+		labelBS = daLabelsPair.getLabelBS();		
+		product = mcLtl.constructProductMDP(da, (MDP)model, labelBS, null);
+		
+		System.out.println("DA N STATES: " + da.size());
+		System.out.println("PRODUCT N STATES: " + product.getProductModel().getNumStates());
+		
 		StateValues sv = checkProbPathFormulaLTL(model, ltl, false, MinMax.max(), statesOfInterest);
 		
 		// Dummy return vector
