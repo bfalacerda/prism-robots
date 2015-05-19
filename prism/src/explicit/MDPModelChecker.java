@@ -35,6 +35,7 @@ import acceptance.AcceptanceReach;
 import acceptance.AcceptanceType;
 import parser.ast.Expression;
 import parser.ast.ExpressionFunc;
+import parser.ast.ExpressionProb;
 import parser.type.TypeInt;
 import prism.PrismComponent;
 import prism.PrismDevNullLog;
@@ -77,6 +78,10 @@ public class MDPModelChecker extends ProbModelChecker
 	{
 		System.out.println("\nIJCAI stuff goes here...");
 		System.out.println("arg 1: " + expr.getOperand(0));
+		
+		ExpressionProb exprProb = (ExpressionProb) expr.getOperand(0);
+		Expression ltl = exprProb.getExpression();
+		StateValues sv = checkProbPathFormulaLTL(model, ltl, false, MinMax.max(), statesOfInterest);
 		
 		// Dummy return vector
 		return new StateValues(TypeInt.getInstance(), model); 
