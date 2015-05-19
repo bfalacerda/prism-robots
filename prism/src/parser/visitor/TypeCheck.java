@@ -387,6 +387,9 @@ public class TypeCheck extends ASTTraverse
 				}
 			}
 			break;
+		case ExpressionFunc.IJCAI:
+			// Anything goes
+			break;
 		default:
 			throw new PrismLangException("Cannot type check unknown function", e);
 		}
@@ -419,6 +422,7 @@ public class TypeCheck extends ASTTraverse
 			e.setType(TypeDouble.getInstance());
 			break;
 		case ExpressionFunc.MULTI:
+		case ExpressionFunc.IJCAI:
 			// Resulting type is always same as first arg
 			if (types[0] instanceof TypeBool)
 				e.setType(TypeBool.getInstance());

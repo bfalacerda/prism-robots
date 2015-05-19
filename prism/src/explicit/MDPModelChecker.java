@@ -34,6 +34,8 @@ import java.util.Map;
 import acceptance.AcceptanceReach;
 import acceptance.AcceptanceType;
 import parser.ast.Expression;
+import parser.ast.ExpressionFunc;
+import parser.type.TypeInt;
 import prism.PrismComponent;
 import prism.PrismDevNullLog;
 import prism.PrismException;
@@ -60,6 +62,26 @@ public class MDPModelChecker extends ProbModelChecker
 	
 	// Model checking functions
 
+	@Override
+	protected StateValues checkExpressionFunc(Model model, ExpressionFunc expr, BitSet statesOfInterest) throws PrismException
+	{
+		switch (expr.getNameCode()) {
+		case ExpressionFunc.IJCAI:
+			return checkIJCAI(model, expr, statesOfInterest);
+		default:
+			return super.checkExpressionFunc(model, expr, statesOfInterest);
+		}
+	}
+
+	protected StateValues checkIJCAI(Model model, ExpressionFunc expr, BitSet statesOfInterest) throws PrismException
+	{
+		System.out.println("\nIJCAI stuff goes here...");
+		System.out.println("arg 1: " + expr.getOperand(0));
+		
+		// Dummy return vector
+		return new StateValues(TypeInt.getInstance(), model); 
+	}
+	
 	@Override
 	protected StateValues checkProbPathFormulaLTL(Model model, Expression expr, boolean qual, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
