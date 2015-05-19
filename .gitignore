@@ -9,3 +9,6 @@ prism/bin/*
 prism/obj/dd/dd_test
 prism/lib/lpsolve55j.jar
 cudd/include/*
+prism/.metadata/*
+prism/classes/*
+prism/.project
