@@ -160,7 +160,7 @@ public class PrismPythonTalker
 
         PrismPythonTalker talker=new PrismPythonTalker(Integer.parseInt(args[0]), args[1], args[2]); 
         client = talker.server.accept();
-        System.out.println("got connection on port " + talker.getSocketPort());  
+        System.out.println("got connection on port" + talker.getSocketPort());  
         BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
         PrintWriter out = new PrintWriter(client.getOutputStream(),true);
         boolean run = true;
@@ -170,7 +170,7 @@ public class PrismPythonTalker
             System.out.println("received: " + command); 
             if(command == null){
                 client = talker.server.accept();
-                System.out.println("got connection on port " + talker.getSocketPort());
+                System.out.println("got connection on port" + talker.getSocketPort());
             } else {
                 if (!commands.contains(command)) {
                     System.out.println("Socket comm is unsynchronised! Trying to recover...");
