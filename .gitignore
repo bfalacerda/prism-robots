@@ -6,10 +6,8 @@
 *.log
 prism/bin/*
 .svn
-prism/obj/dd/dd_test
-prism/lib/lpsolve55j.jar
+prism/obj/*
 cudd/include/*
 prism/.metadata/*
 prism/classes/*
 prism/.project
-prism/object/prism/ngprism
