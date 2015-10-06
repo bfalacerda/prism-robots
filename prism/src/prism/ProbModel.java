@@ -245,6 +245,12 @@ public class ProbModel implements Model
 	}
 
 	@Override
+	public JDDNode getTransReln()
+	{
+		return trans01;
+	}
+
+	@Override
 	public JDDNode getDeadlocks()
 	{
 		return deadlocks;
@@ -870,18 +876,21 @@ public class ProbModel implements Model
 		return index;
 	}
 
-	// clear up (deref all dds, dd vars)
-
+	/**
+	 * Clear the model (deref all DDs and DD variables)
+	 */
 	public void clear()
 	{
-		for (int i = 0; i < numVars; i++) {
-			varDDRowVars[i].derefAll();
-			varDDColVars[i].derefAll();
-		}
-		for (int i = 0; i < numModules; i++) {
-			moduleDDRowVars[i].derefAll();
-			moduleDDColVars[i].derefAll();
-		}
+		if (varDDRowVars != null)
+			JDDVars.derefAllArray(varDDRowVars);
+		if (varDDColVars != null)
+			JDDVars.derefAllArray(varDDColVars);
+
+		if (moduleDDRowVars != null)
+			JDDVars.derefAllArray(moduleDDRowVars);
+		if (moduleDDColVars != null)
+			JDDVars.derefAllArray(moduleDDColVars);
+
 		allDDRowVars.derefAll();
 		allDDColVars.derefAll();
 		JDD.Deref(trans);

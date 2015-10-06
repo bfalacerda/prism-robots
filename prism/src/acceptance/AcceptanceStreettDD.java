@@ -46,7 +46,7 @@ import jdd.JDDVars;
  */
 @SuppressWarnings("serial")
 public class AcceptanceStreettDD
-       extends ArrayList<AcceptanceStreettDD.StreettPair>
+       extends ArrayList<AcceptanceStreettDD.StreettPairDD>
        implements AcceptanceOmegaDD
 {
 
@@ -54,7 +54,7 @@ public class AcceptanceStreettDD
 	 * A pair in a Streett acceptance condition, i.e., with
 	 *  (G F "R") -> (G F "G")
 	 **/
-	public static class StreettPair {
+	public static class StreettPairDD {
 		/** State set R */
 		private JDDNode R;
 		
@@ -65,7 +65,7 @@ public class AcceptanceStreettDD
 		 * Constructor with R and G state sets.
 		 * Becomes owner of the references of R and G.
 		 */
-		public StreettPair(JDDNode R, JDDNode G)
+		public StreettPairDD(JDDNode R, JDDNode G)
 		{
 			this.R = R;
 			this.G = G;
@@ -96,16 +96,22 @@ public class AcceptanceStreettDD
 			return G;
 		}
 
+		public StreettPairDD clone()
+		{
+			return new StreettPairDD(getR(), getG());
+		}
+
 		/** Returns true if the bottom strongly connected component
 		 * given by bscc_states is accepting for this pair.
+		 * <br>[ REFS: <i>none</i>, DEREFS: <i>none</i> ]
 		 */
 		public boolean isBSCCAccepting(JDDNode bscc_states)
 		{
-			if (JDD.AreInterecting(R, bscc_states)) {
+			if (JDD.AreIntersecting(R, bscc_states)) {
 				// there is some state in bscc_states
 				// that is in R, requiring that G is visited
 				// as well:
-				if (!JDD.AreInterecting(G, bscc_states)) {
+				if (!JDD.AreIntersecting(G, bscc_states)) {
 					return false;
 				} else {
 					// G is visited as well
@@ -122,6 +128,11 @@ public class AcceptanceStreettDD
 		{
 			return "(" + R + "->" + G + ")";
 		}
+	}
+
+	/** Constructor, create empty condition */
+	public AcceptanceStreettDD()
+	{
 	}
 
 	/**
@@ -144,7 +155,7 @@ public class AcceptanceStreettDD
 				newG = JDD.SetVectorElement(newG, ddRowVars, i, 1.0);
 			}
 	
-			StreettPair newPair = new StreettPair(newR, newG);
+			StreettPairDD newPair = new StreettPairDD(newR, newG);
 			this.add(newPair);
 		}
 	}
@@ -152,7 +163,7 @@ public class AcceptanceStreettDD
 	@Override
 	public boolean isBSCCAccepting(JDDNode bscc_states)
 	{
-		for (StreettPair pair : this) {
+		for (StreettPairDD pair : this) {
 			if (!pair.isBSCCAccepting(bscc_states)) {
 				return false;
 			}
@@ -163,16 +174,53 @@ public class AcceptanceStreettDD
 	@Override
 	public void clear()
 	{
-		for (StreettPair pair : this) {
+		for (StreettPairDD pair : this) {
 			pair.clear();
 		}
 		super.clear();
 	}
 
+	/**
+	 * Returns a new Streett acceptance condition that corresponds to the conjunction
+	 * of this and the other Streett acceptance condition. The StreettPairs are cloned, i.e.,
+	 * not shared with the argument acceptance condition.
+	 * @param other the other Streett acceptance condition
+	 * @return new AcceptanceStreett, conjunction of this and other
+	 */
+	public AcceptanceStreettDD and(AcceptanceStreettDD other)
+	{
+		AcceptanceStreettDD result = new AcceptanceStreettDD();
+		for (StreettPairDD pair : this) {
+			result.add(pair.clone());
+		}
+		for (StreettPairDD pair : other) {
+			result.add(pair.clone());
+		}
+		return result;
+	}
+
+	/**
+	 * Get the Rabin acceptance condition that is the dual of this Streett acceptance condition, i.e.,
+	 * any word that is accepted by this condition is rejected by the returned Rabin condition.
+	 * @return the complement Rabin acceptance condition
+	 */
+	public AcceptanceRabinDD complement()
+	{
+		AcceptanceRabinDD accRabin = new AcceptanceRabinDD();
+
+		for (StreettPairDD accPairStreett : this) {
+			JDDNode L = accPairStreett.getG();
+			JDDNode K = accPairStreett.getR();
+			AcceptanceRabinDD.RabinPairDD accPairRabin = new AcceptanceRabinDD.RabinPairDD(L, K);
+			accRabin.add(accPairRabin);
+		}
+		return accRabin;
+	}
+
 	@Override
 	public String toString() {
 		String result = "";
-		for (StreettPair pair : this) {
+		for (StreettPairDD pair : this) {
 			result += pair.toString();
 		}
 		return result;

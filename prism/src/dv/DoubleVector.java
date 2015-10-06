@@ -104,6 +104,7 @@ public class DoubleVector
 	
 	/**
 	 * Create a new DoubleVector from an existing MTBDD representation of an array.
+	 * <br>[ DEREFS: <i>none</i> ]
 	 */
 	public DoubleVector(JDDNode dd, JDDVars vars, ODDNode odd)
 	{
@@ -198,11 +199,24 @@ public class DoubleVector
 		return DV_DotProduct(v, n, dv.v);
 	}
 
-	// filter vector using a bdd (set elements not in filter to 0)
-	private native void DV_Filter(long v, long filter, long vars, int num_vars, long odd);
+
+	private native void DV_Filter(long v, long filter, double d, long vars, int num_vars, long odd);
+	/**
+	 * Filter vector using a bdd (set elements not in filter to d)
+	 * <br>[ REFS: <i>result</i>, DEREFS: <i>none</i> ]
+	 */
+	public void filter(JDDNode filter, double d, JDDVars vars, ODDNode odd)
+	{
+		DV_Filter(v, filter.ptr(), d, vars.array(), vars.n(), odd.ptr());
+	}
+
+	/**
+	 * Filter vector using a bdd (set elements not in filter to 0)
+	 * <br>[ REFS: <i>none</i>, DEREFS: <i>none</i> ]
+	 */
 	public void filter(JDDNode filter, JDDVars vars, ODDNode odd)
 	{
-		DV_Filter(v, filter.ptr(), vars.array(), vars.n(), odd.ptr());
+		DV_Filter(v, filter.ptr(), 0.0, vars.array(), vars.n(), odd.ptr());
 	}
 	
 	// apply max operator, i.e. v[i] = max(v[i], v2[i]), where v2 is an mtbdd
@@ -293,22 +307,22 @@ public class DoubleVector
 		
 		switch (relOp) {
 		case GEQ:
-			sol = new JDDNode(
+			sol = JDD.ptrToNode(
 				DV_BDDGreaterThanEquals(v, bound, vars.array(), vars.n(), odd.ptr())
 			);
 			break;
 		case GT:
-			sol = new JDDNode(
+			sol = JDD.ptrToNode(
 				DV_BDDGreaterThan(v, bound, vars.array(), vars.n(), odd.ptr())
 			);
 			break;
 		case LEQ:
-			sol = new JDDNode(
+			sol = JDD.ptrToNode(
 				DV_BDDLessThanEquals(v, bound, vars.array(), vars.n(), odd.ptr())
 			);
 			break;
 		case LT:
-			sol = new JDDNode(
+			sol = JDD.ptrToNode(
 				DV_BDDLessThan(v, bound, vars.array(), vars.n(), odd.ptr())
 			);
 			break;
@@ -331,7 +345,7 @@ public class DoubleVector
 	{
 		JDDNode sol;
 		
-		sol = new JDDNode(
+		sol = JDD.ptrToNode(
 			DV_BDDInterval(v, lo, hi, vars.array(), vars.n(), odd.ptr())
 		);
 		
@@ -347,7 +361,7 @@ public class DoubleVector
 	{
 		JDDNode sol;
 		
-		sol = new JDDNode(
+		sol = JDD.ptrToNode(
 			DV_BDDCloseValueAbs(v, value, epsilon, vars.array(), vars.n(), odd.ptr())
 		);
 		
@@ -363,7 +377,7 @@ public class DoubleVector
 	{
 		JDDNode sol;
 		
-		sol = new JDDNode(
+		sol = JDD.ptrToNode(
 			DV_BDDCloseValueRel(v, value, epsilon, vars.array(), vars.n(), odd.ptr())
 		);
 		
@@ -379,7 +393,7 @@ public class DoubleVector
 	{
 		JDDNode sol;
 		
-		sol = new JDDNode(
+		sol = JDD.ptrToNode(
 			DV_ConvertToMTBDD(v, vars.array(), vars.n(), odd.ptr())
 		);
 		

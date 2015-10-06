@@ -33,75 +33,39 @@ import prism.OpRelOpBound;
 import prism.PrismException;
 import prism.PrismLangException;
 
-public class ExpressionSS extends Expression implements ExpressionQuant
+public class ExpressionSS extends ExpressionQuant
 {
-	RelOp relOp = null;
-	Expression prob = null;
-	Expression expression = null;
-	// Note: this "old-style" filter is just for display purposes
-	// The parser creates an (invisible) new-style filter around this expression
-	Filter filter = null;
-	
 	// Constructors
 	
 	public ExpressionSS()
 	{
 	}
 	
-	public ExpressionSS(Expression e, String r, Expression p)
+	public ExpressionSS(Expression expression, String relOpString, Expression p)
 	{
-		expression = e;
-		relOp = RelOp.parseSymbol(r);
-		prob = p;
+		setExpression(expression);
+		setRelOp(relOpString);
+		setBound(p);
 	}
 
 	// Set methods
 	
-	public void setRelOp(RelOp relOp)
-	{
-		this.relOp = relOp;
-	}
-
-	public void setRelOp(String r)
-	{
-		relOp = RelOp.parseSymbol(r);
-	}
-
+	/**
+	 * Set the probability bound. Equivalent to {@code setBound(p)}.
+	 */
 	public void setProb(Expression p)
 	{
-		prob = p;
-	}
-
-	public void setExpression(Expression e)
-	{
-		expression = e;
-	}
-	
-	public void setFilter(Filter f)
-	{
-		filter = f;
+		setBound(p);
 	}
 
 	// Get methods
 	
-	public RelOp getRelOp()
-	{
-		return relOp;
-	}
-	
+	/**
+	 * Get the probability bound. Equivalent to {@code getBound()}.
+	 */
 	public Expression getProb()
 	{
-		return prob;
-	}
-
-	public Expression getExpression()
-	{
-		return expression;
-	}
-	
-	public Filter getFilter()
-	{
-		return filter;
+		return getBound();
 	}
 
 	/**
@@ -111,21 +75,19 @@ public class ExpressionSS extends Expression implements ExpressionQuant
 	 */
 	public OpRelOpBound getRelopBoundInfo(Values constantValues) throws PrismException
 	{
-		if (prob != null) {
-			double bound = prob.evaluateDouble(constantValues);
-			if (bound < 0 || bound > 1)
-				throw new PrismException("Invalid probability bound " + bound + " in P operator");
-			return new OpRelOpBound("S", relOp, bound);
+		if (getBound() != null) {
+			double boundValue = getBound().evaluateDouble(constantValues);
+			if (boundValue < 0 || boundValue > 1)
+				throw new PrismException("Invalid probability bound " + boundValue + " in P operator");
+			return new OpRelOpBound("S", getRelOp(), boundValue);
 		} else {
-			return new OpRelOpBound("S", relOp, null);
+			return new OpRelOpBound("S", getRelOp(), null);
 		}
 	}
 	
 	// Methods required for Expression:
 	
-	/**
-	 * Is this expression constant?
-	 */
+	@Override
 	public boolean isConstant()
 	{
 		return false;
@@ -137,21 +99,16 @@ public class ExpressionSS extends Expression implements ExpressionQuant
 		return false;
 	}
 	
-	/**
-	 * Evaluate this expression, return result.
-	 * Note: assumes that type checking has been done already.
-	 */
+	@Override
 	public Object evaluate(EvaluateContext ec) throws PrismLangException
 	{
 		throw new PrismLangException("Cannot evaluate an S operator without a model");
 	}
 
-	/**
-	  * Get "name" of the result of this expression (used for y-axis of any graphs plotted)
-	  */
+	@Override
 	public String getResultName()
 	{
-		return (prob == null) ? "Probability" : "Result";
+		return (getBound() == null) ? "Probability" : "Result";
 	}
 
 	@Override
@@ -162,43 +119,39 @@ public class ExpressionSS extends Expression implements ExpressionQuant
 
 	// Methods required for ASTElement:
 	
-	/**
-	 * Visitor method.
-	 */
+	@Override
 	public Object accept(ASTVisitor v) throws PrismLangException
 	{
 		return v.visit(this);
 	}
+
+	@Override
+	public Expression deepCopy()
+	{
+		ExpressionSS expr = new ExpressionSS();
+		expr.setExpression(getExpression() == null ? null : getExpression().deepCopy());
+		expr.setRelOp(getRelOp());
+		expr.setBound(getBound() == null ? null : getBound().deepCopy());
+		expr.setFilter(getFilter() == null ? null : (Filter)getFilter().deepCopy());
+		expr.setType(type);
+		expr.setPosition(this);
+		return expr;
+	}
+
+	// Standard methods
 	
-	/**
-	 * Convert to string.
-	 */
+	@Override
 	public String toString()
 	{
 		String s = "";
 		
-		s += "S" + relOp;
-		s += (prob==null) ? "?" : prob.toString();
-		s += " [ " + expression;
-		if (filter != null) s += " "+filter;
+		s += "S" + getModifierString() + getRelOp();
+		s += (getBound()==null) ? "?" : getBound().toString();
+		s += " [ " + getExpression();
+		if (getFilter() != null) s += " "+getFilter();
 		s += " ]";
 		
 		return s;
-	}
-
-	/**
-	 * Perform a deep copy.
-	 */
-	public Expression deepCopy()
-	{
-		ExpressionSS expr = new ExpressionSS();
-		expr.setExpression(expression == null ? null : expression.deepCopy());
-		expr.setRelOp(relOp);
-		expr.setProb(prob == null ? null : prob.deepCopy());
-		expr.setFilter(filter == null ? null : (Filter)filter.deepCopy());
-		expr.setType(type);
-		expr.setPosition(this);
-		return expr;
 	}
 }
 

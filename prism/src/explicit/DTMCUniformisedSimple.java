@@ -36,6 +36,7 @@ import parser.State;
 import parser.Values;
 import prism.ModelType;
 import prism.PrismException;
+import prism.PrismNotSupportedException;
 import explicit.rewards.MCRewards;
 
 /**
@@ -78,7 +79,7 @@ public class DTMCUniformisedSimple extends DTMCExplicit
 	@Override
 	public void buildFromPrismExplicit(String filename) throws PrismException
 	{
-		throw new PrismException("Not supported");
+		throw new PrismNotSupportedException("Not supported");
 	}
 	
 	// Accessors (for Model)
@@ -182,7 +183,7 @@ public class DTMCUniformisedSimple extends DTMCExplicit
 	public String infoString()
 	{
 		String s = "";
-		s += numStates + " states (" + getNumInitialStates() + " initial)";
+		s += getNumStates() + " states (" + getNumInitialStates() + " initial)";
 		s += ", " + getNumTransitions() + " transitions (incl. " + numExtraTransitions + " self-loops)";
 		return s;
 	}
@@ -191,7 +192,7 @@ public class DTMCUniformisedSimple extends DTMCExplicit
 	public String infoStringTable()
 	{
 		String s = "";
-		s += "States:      " + numStates + " (" + getNumInitialStates() + " initial)\n";
+		s += "States:      " + getNumStates() + " (" + getNumInitialStates() + " initial)\n";
 		s += "Transitions: " + getNumTransitions() + "\n";
 		return s;
 	}

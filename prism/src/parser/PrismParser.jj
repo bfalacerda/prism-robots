@@ -37,8 +37,11 @@ import java.io.*;
 import java.util.List;
 import java.util.ArrayList;
 
+import jltl2ba.SimpleLTL;
+import parser.BooleanUtils;
 import parser.ast.*;
 import parser.type.*;
+import parser.visitor.*;
 import prism.ModelType;
 import prism.PrismLangException;
 
@@ -73,6 +76,7 @@ public class PrismParser
 				System.out.println("Where: <switch> = -modulesfile or -mf");
 				System.out.println("                  -propertiesfile or -pf");
 				System.out.println("                  -expression or -e");
+				System.out.println("                  -ltl or -l");
 				System.exit(1);
 			}
 			
@@ -103,6 +107,38 @@ public class PrismParser
 				expr.semanticCheck();
 				System.out.println("Type: " + expr.getType().getTypeString());
 				System.out.println("Eval: " + expr.evaluate());
+			}
+			else if (args[0].equals("-ltl") || args[0].equals("-l")) {
+				Expression expr = p.parseSingleLTLFormula(str);
+				expr = (Expression) expr.accept(new ASTTraverseModify() {
+					public Object visit(ExpressionIdent e) throws PrismLangException
+					{
+						return new parser.ast.ExpressionVar(e.getName(), TypeBool.getInstance());
+					}
+				});
+				System.out.println("LTL formula: " + expr.toString());
+				System.out.print("Tree:\n=====\n" + expr.toTreeString());
+				expr.typeCheck();
+				//expr.semanticCheck();
+				System.out.println("Type: " + expr.getType().getTypeString());
+				boolean pnf = Expression.isPositiveNormalFormLTL(expr);
+				System.out.println("Positive normal form: " + pnf);
+				System.out.println("Syntactically co-safe: " + Expression.isCoSafeLTLSyntactic(expr));
+				if (!pnf) {
+					Expression exprPnf = BooleanUtils.convertLTLToPositiveNormalForm(expr.deepCopy());
+					System.out.println("Positive normal form conversion: " + exprPnf);
+					System.out.println("Syntactically co-safe: " + Expression.isCoSafeLTLSyntactic(exprPnf));
+				}
+				Expression expr2 = (Expression) expr.deepCopy().accept(new ASTTraverseModify() {
+					public Object visit(ExpressionVar e) throws PrismLangException
+					{
+							return new parser.ast.ExpressionLabel(e.getName());
+					}
+				});
+				SimpleLTL sltl = expr2.convertForJltl2ba();
+				System.out.println("LBT: " + sltl.toStringLBT());
+				System.out.println("Spot: " + sltl.toStringSpot());
+				System.out.println("Spin: " + sltl.toStringSpin());
 			} else {
 				System.out.println("Unknown switch"); System.exit(1);
 			}
@@ -186,6 +222,24 @@ public class PrismParser
 		// Parse
 		try {
 			expr = SingleExpression();
+		}
+		catch (ParseException e) {
+			throw generateSyntaxError(e);
+		}
+		return expr;
+	}
+	
+	// Parse a single LTL formula
+	
+	public Expression parseSingleLTLFormula(InputStream str) throws PrismLangException
+	{
+		Expression expr = null;
+		
+		// (Re)start parser
+		ReInit(str);
+		// Parse
+		try {
+			expr = SingleLTLFormula();
 		}
 		catch (ParseException e) {
 			throw generateSyntaxError(e);
@@ -598,6 +652,16 @@ Expression SingleExpression() :
 }
 {
 	( ret = Expression(false, false) <EOF> ) { return ret; }
+}
+
+// A single LTL formula
+
+Expression SingleLTLFormula() :
+{
+	Expression ret;
+}
+{
+	( ret = Expression(true, true) <EOF> ) { return ret; }
 }
 
 //-----------------------------------------------------------------------------------
@@ -1454,6 +1518,7 @@ Expression ExpressionParenth(boolean prop, boolean pathprop) :
 
 Expression ExpressionProb(boolean prop, boolean pathprop) :
 {
+	ExpressionIdent modifier = null;
 	int r;
 	String relOp = null;
 	Expression prob = null;
@@ -1467,7 +1532,8 @@ Expression ExpressionProb(boolean prop, boolean pathprop) :
 	// This production is only allowed in expressions if the "prop" parameter is true
 	{ if (!prop) throw generateParseException(); }
 	// Various options for "P" keyword and attached symbols
-	(( begin = <P> (( r = LtGt() prob = Expression(false, false) { relOp = ExpressionBinaryOp.opSymbols[r]; isBool = true; } )
+	(( begin = <P> ( <LPARENTH> modifier = IdentifierExpression() <RPARENTH> )? (
+			( r = LtGt() prob = Expression(false, false) { relOp = ExpressionBinaryOp.opSymbols[r]; isBool = true; } )
 	       |( <EQ> <QMARK> { relOp = "="; isBool = false; } )
 	       |( <MIN> <EQ> <QMARK> { relOp = "min="; isBool = false; } )
 	       |( <MAX> <EQ> <QMARK> { relOp = "max="; isBool = false; } )))
@@ -1477,6 +1543,7 @@ Expression ExpressionProb(boolean prop, boolean pathprop) :
 	// Path formula, optional filter
 	<LBRACKET> expr = Expression(prop, true) (filter = Filter())? <RBRACKET>
 	{
+		ret.setModifier(modifier == null ? null : modifier.getName());
 		ret.setRelOp(relOp);
 		ret.setProb(prob);
 		ret.setExpression(expr);
@@ -1515,6 +1582,7 @@ Filter Filter() :
 
 Expression ExpressionSS(boolean prop, boolean pathprop) :
 {
+	ExpressionIdent modifier = null;
 	int r;
 	String relOp = null;
 	Expression prob = null;
@@ -1529,12 +1597,14 @@ Expression ExpressionSS(boolean prop, boolean pathprop) :
 	{ if (!prop) throw generateParseException(); }
 	// Various options for "S" keyword and attached symbols
 	begin = <S> (
+		( <LPARENTH> modifier = IdentifierExpression() <RPARENTH> )?
 		( r = LtGt() prob = Expression(false, false) { relOp = ExpressionBinaryOp.opSymbols[r]; isBool = true; } ) |
 		( <EQ> <QMARK> { relOp = "="; isBool = false; } )
 	)
 	// Expression, optional filter
 	<LBRACKET> expr = Expression(prop, pathprop) (filter = Filter())? <RBRACKET>
 	{
+		ret.setModifier(modifier == null ? null : modifier.getName());
 		ret.setRelOp(relOp);
 		ret.setProb(prob);
 		ret.setExpression(expr);
@@ -1556,6 +1626,7 @@ Expression ExpressionSS(boolean prop, boolean pathprop) :
 
 Expression ExpressionReward(boolean prop, boolean pathprop) :
 {
+	ExpressionIdent modifier = null;
 	int r;
 	String relOp = null;
 	Expression rew = null;
@@ -1569,8 +1640,10 @@ Expression ExpressionReward(boolean prop, boolean pathprop) :
 	// This production is only allowed in expressions if the "prop" parameter is true
 	{ if (!prop) throw generateParseException(); }
 	// Various options for "R" keyword and attached symbols
-	(( begin = <R> (RewardIndex(ret))?
-	(( r = LtGt() rew = Expression(false, false) { relOp = ExpressionBinaryOp.opSymbols[r]; isBool = true; } )
+	(( begin = <R>
+		( <LPARENTH> modifier = IdentifierExpression() <RPARENTH> )?
+		(RewardIndex(ret))?
+		(( r = LtGt() rew = Expression(false, false) { relOp = ExpressionBinaryOp.opSymbols[r]; isBool = true; } )
 	   |( <EQ> <QMARK> { relOp = "="; isBool = false; } )
 	   |( <MIN> <EQ> <QMARK> { relOp = "min="; isBool = false; } )
 	   |( <MAX> <EQ> <QMARK> { relOp = "max="; isBool = false; } )))
@@ -1580,6 +1653,7 @@ Expression ExpressionReward(boolean prop, boolean pathprop) :
 	// Path formula, optional filter
 	<LBRACKET> expr = ExpressionRewardContents(prop, pathprop) (filter = Filter())? <RBRACKET>
 	{
+		ret.setModifier(modifier == null ? null : modifier.getName());
 		ret.setRelOp(relOp);
 		ret.setReward(rew);
 		ret.setExpression(expr);
@@ -1619,6 +1693,10 @@ void RewardIndex(ExpressionReward exprRew) :
 
 // Contents of an R operator
 
+// JavaCC warns about lookahead for this function. This is because there is a possible conflict between
+// R [ S ], where "S" is the long-run reward operator, and R [ S [ ] ], where "S [ ]" is an LTL formula
+// comprising a single atomic proposition. We use lookahead to resolve the ambiguity.
+
 Expression ExpressionRewardContents(boolean prop, boolean pathprop) :
 {
 	Expression expr = null;
@@ -1629,11 +1707,15 @@ Expression ExpressionRewardContents(boolean prop, boolean pathprop) :
 {
 	{ begin = getToken(1); }
 	(
-	// Normal reward operators
-	LOOKAHEAD(<C> <LE>) begin = <C> <LE> expr = Expression(false, false) { exprTemp = new ExpressionTemporal(ExpressionTemporal.R_C, null, null); exprTemp.setUpperBound(expr); ret = exprTemp; }
+	// First look for cases where it starts with "S" (see above)
+	LOOKAHEAD(ExpressionSS(prop, pathprop)) expr = ExpressionSS(prop, true) { ret = expr; }
+	| <S> { ret = new ExpressionTemporal(ExpressionTemporal.R_S, null, null); }
+	
+	// Normal reward operators (excluding S; see above)
+	| LOOKAHEAD(<C> <LE>) begin = <C> <LE> expr = Expression(false, false) { exprTemp = new ExpressionTemporal(ExpressionTemporal.R_C, null, null); exprTemp.setUpperBound(expr); ret = exprTemp; }
 	| <C> { ret = new ExpressionTemporal(ExpressionTemporal.R_C, null, null); }
 	| <I> <EQ> expr = Expression(false, false) { exprTemp = new ExpressionTemporal(ExpressionTemporal.R_I, null, null); exprTemp.setUpperBound(expr); ret = exprTemp; }
-	| <S> { ret = new ExpressionTemporal(ExpressionTemporal.R_S, null, null); }
+	
 	// Path formula (including F "target")
 	| expr = Expression(prop, true) { ret = expr; }
 	)
@@ -1691,8 +1773,8 @@ Expression ExpressionStrategy(boolean prop, boolean pathprop) :
 	{ if (!prop) throw generateParseException(); }
 	(
 	// <<...>> or [[...]]
-	(( begin = <DLT> { ret = new ExpressionStrategy(true); } <DGT> )
-	| (begin = <DLBRACKET> { ret = new ExpressionStrategy(false); } <DRBRACKET> ))
+	(( begin = <DLT> { ret = new ExpressionStrategy(true); } ExpressionStrategyCoalition(ret) <DGT> )
+	| (begin = <DLBRACKET> { ret = new ExpressionStrategy(false); } ExpressionStrategyCoalition(ret) <DRBRACKET> ))
 	// Child expression
 	( expr = ExpressionProb(prop, pathprop) | expr = ExpressionReward(prop, pathprop)
 	| expr = ExpressionParenth(prop, pathprop) | expr = ExpressionFuncOrIdent(prop, pathprop) )
@@ -1702,6 +1784,32 @@ Expression ExpressionStrategy(boolean prop, boolean pathprop) :
 		ret.setPosition(begin, getToken(0));
 		return ret;
 	}
+}
+
+// Coalition (player list) for a strategy (<<>> or [[]]) operator
+
+void ExpressionStrategyCoalition(ExpressionStrategy exprStrat) :
+{
+	List<String> coalition = new ArrayList<String>();
+	String s;
+}
+{
+	( <TIMES> ) { exprStrat.setCoalitionAllPlayers();}
+	|
+	( s = ExpressionStrategyCoalitionPlayer() { coalition.add(s); }
+	( <COMMA> s = ExpressionStrategyCoalitionPlayer()  { coalition.add(s); } )* )?
+	{ exprStrat.setCoalition(coalition); }
+}
+
+// Single player in a coalition for a strategy (<<>> or [[]]) operator
+
+String ExpressionStrategyCoalitionPlayer() :
+{
+	String s;
+}
+{
+	( <REG_INT> | <REG_IDENT> ) { s = getToken(0).image; }
+	{ return s; }
 }
 
 // (Property) expression: label (including "init")

@@ -323,6 +323,19 @@ cuddpackageforce: checks
 	  $(MAKE) C="$(C)" CC="$(C)" CPP="$(CPP)" \
 	  XCFLAGS="$(CUDD_XCFLAGS)";
 
+# use this to force a rebuild (with javacc) of the main parser
+parser:
+	@echo Making parser ...; \
+	cd src/parser && \
+	$(MAKE) SRC_DIR="$(SRC_DIR)" touch && \
+	$(MAKE) \
+	SRC_DIR="$(SRC_DIR)" \
+	CLASSES_DIR="$(CLASSES_DIR)" \
+	JAVAC="$(JAVAC) $(JFLAGS)" \
+	JAVACC="$(JAVACC)" \
+	JAVAH="$(JAVAH) $(JFLAGS)" \
+	CLASSPATHSEP="$(CLASSPATHSEP)"
+
 extpackages: checks
 	@for ext in $(EXT_PACKAGES); do \
 	  echo Making $$ext ...; \
@@ -389,14 +402,14 @@ make_dirs:
 
 tests: testslocal
 	@if [ -d ~/prism/prism-tests ]; then \
-	  cd ~/prism/prism-tests && $(PWD)/etc/scripts/prism-auto -t -m . -p $(PWD)/bin/prism; \
+	  cd ~/prism/prism-tests && $(PWD)/etc/scripts/prism-auto -t -m . -p $(PWD)/bin/prism --nailgun --ngprism $(PWD)/bin/ngprism; \
 	else \
 	  echo "Skipping tests"; \
 	fi
 
 testslocal:
 	@if [ -d tests ]; then \
-	  cd tests && $(PWD)/etc/scripts/prism-auto -t -m . -p $(PWD)/bin/prism; \
+	  cd tests && $(PWD)/etc/scripts/prism-auto -t -m . -p $(PWD)/bin/prism --nailgun --ngprism $(PWD)/bin/ngprism; \
 	else \
 	  echo "Skipping local tests"; \
 	fi
@@ -407,6 +420,8 @@ bin_scripts:
 	  echo Copying "$(SRC_DIR)/bin/$$target -> bin/$$target_trunc" && \
 	  cp $(SRC_DIR)/bin/$$target bin/$$target_trunc; \
 	done;
+	@echo Copying "$(OBJ_DIR)/prism/ngprism$(EXE) -> bin/ngprism$(EXE)" && \
+	cp $(OBJ_DIR)/prism/ngprism$(EXE) bin/ngprism$(EXE)
 	@./install.sh silent
 
 # Unless VERSION has been passed in (as VERSION=xxx),
@@ -501,10 +516,10 @@ tarcf:
 	echo Building tar file "../"$$TARCF_DIR".tar.gz" && \
 	(cd ..; tar cfz $$TARCF_DIR".tar.gz" $$TARCF_DIR)
 
-PRISM_CLASSPATH = "$(THIS_DIR)/$(PRISM_DIR_REL)/$(CLASSES_DIR)$(CLASSPATHSEP)$(THIS_DIR)/$(PRISM_DIR_REL)/lib/*"
+PRISM_CLASSPATH = "$(CLASSES_DIR)$(CLASSPATHSEP)$(LIB_DIR)/*"
 
 javadoc:
-	@JAVADOC_DIRS=`echo $(MAKE_DIRS) | sed 's/\//./g' | sed 's/ /:/g'` && \mkdir -p javadoc; javadoc $(JFLAGS) -d javadoc -overview $(SRC_DIR)/overview.html -sourcepath $(SRC_DIR) -classpath $(SRC_DIR)$(CLASSPATHSEP)$(PRISM_CLASSPATH) -subpackages $$JAVADOC_DIRS
+	@JAVADOC_DIRS=`echo $(MAKE_DIRS) | sed 's/\//./g' | sed 's/ /:/g'` && \mkdir -p javadoc; javadoc $(JFLAGS) -d javadoc -overview $(SRC_DIR)/overview.html -sourcepath $(SRC_DIR) -classpath $(SRC_DIR)$(CLASSPATHSEP)$(PRISM_CLASSPATH) -subpackages $$JAVADOC_DIRS -exclude parser
 
 clean: checks
 	@(for dir in $(MAKE_DIRS); do \

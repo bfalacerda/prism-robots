@@ -384,9 +384,6 @@ public class SemanticCheck extends ASTTraverse
 		if (op == ExpressionTemporal.R_I && (operand1 != null || operand2 != null || lBound != null || uBound == null)) {
 			throw new PrismLangException("Badly formed " + e.getOperatorSymbol() + " operator", e);
 		}
-		if (op == ExpressionTemporal.R_F && (operand1 != null || operand2 == null || lBound != null || uBound != null)) {
-			throw new PrismLangException("Badly formed " + e.getOperatorSymbol() + " operator", e);
-		}
 		if (op == ExpressionTemporal.R_S && (operand1 != null || operand2 != null || lBound != null || uBound != null)) {
 			throw new PrismLangException("Badly formed " + e.getOperatorSymbol() + " operator", e);
 		}
@@ -441,6 +438,9 @@ public class SemanticCheck extends ASTTraverse
 
 	public void visitPost(ExpressionProb e) throws PrismLangException
 	{
+		if (e.getModifier() != null) {
+			throw new PrismLangException("Modifier \"" + e.getModifier() + "\" not supported for P operator");
+		}
 		if (e.getProb() != null && !e.getProb().isConstant()) {
 			throw new PrismLangException("P operator probability bound is not constant", e.getProb());
 		}
@@ -448,6 +448,9 @@ public class SemanticCheck extends ASTTraverse
 
 	public void visitPost(ExpressionReward e) throws PrismLangException
 	{
+		if (e.getModifier() != null) {
+			throw new PrismLangException("Modifier \"" + e.getModifier() + "\" not supported for R operator");
+		}
 		if (e.getRewardStructIndex() != null) {
 			if (e.getRewardStructIndex() instanceof Expression) {
 				Expression rsi = (Expression) e.getRewardStructIndex();
@@ -481,6 +484,9 @@ public class SemanticCheck extends ASTTraverse
 
 	public void visitPost(ExpressionSS e) throws PrismLangException
 	{
+		if (e.getModifier() != null) {
+			throw new PrismLangException("Modifier \"" + e.getModifier() + "\" not supported for S operator");
+		}
 		if (e.getProb() != null && !e.getProb().isConstant()) {
 			throw new PrismLangException("S operator probability bound is not constant", e.getProb());
 		}

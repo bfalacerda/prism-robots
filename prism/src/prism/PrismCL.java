@@ -28,6 +28,7 @@ package prism;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,7 +79,7 @@ public class PrismCL implements PrismModelListener
 	private boolean exportmecs = false;
 	private boolean exportresults = false;
 	private boolean exportresultsmatrix = false;
-	private boolean exportresultscsv = false;
+	private String exportResultsFormat = "plain";
 	private boolean exportPlainDeprecated = false;
 	private boolean exportModelNoBasename = false;
 	private int exportType = Prism.EXPORT_PLAIN;
@@ -196,8 +197,26 @@ public class PrismCL implements PrismModelListener
 	private String[] paramUpperBounds = null;
 	private String[] paramNames = null;
 
-	// entry point - run method
 
+	/**
+	 * Entry point: call run method, catch CuddOutOfMemoryException
+	 */
+	public void go(String[] args) {
+		try {
+			run(args);
+		} catch (jdd.JDD.CuddOutOfMemoryException e) {
+			mainLog.println("\nCUDD internal error detected, from the following stack trace:");
+			for (StackTraceElement st : e.getStackTrace()) {
+				mainLog.print("  ");
+				mainLog.println(st);
+			}
+			errorAndExit(e.getMessage() + ".\nTip: Try using the -cuddmaxmem switch to increase the memory available to CUDD");
+		}
+	}
+
+	/**
+	 * Run PRISM.
+	 */
 	public void run(String[] args)
 	{
 		int i, j, k;
@@ -394,13 +413,14 @@ public class PrismCL implements PrismModelListener
 						if (test) {
 							try {
 								mainLog.println();
-								Values allConsts = new Values(definedMFConstants);
-								allConsts.addValues(definedPFConstants);
+								Values allConsts = new Values(modulesFile.getConstantValues(), propertiesFile.getConstantValues());
 								if (propertiesToCheck.get(j).checkAgainstExpectedResult(res.getResult(), allConsts)) {
 									mainLog.println("Testing result: PASS");
 								} else {
 									mainLog.println("Testing result: NOT TESTED");
 								}
+							} catch (PrismNotSupportedException e) {
+								mainLog.println("Testing result: UNSUPPORTED: " + e.getMessage());
 							} catch (PrismException e) {
 								mainLog.println("Testing result: FAIL: " + e.getMessage());
 								if (testExitsOnFail)
@@ -440,32 +460,31 @@ public class PrismCL implements PrismModelListener
 
 		// export results (if required)
 		if (exportresults) {
-
-			mainLog.print("\nExporting results ");
-			if (exportresultsmatrix)
-				mainLog.print("in matrix form ");
-			if (!exportResultsFilename.equals("stdout"))
-				mainLog.println("to file \"" + exportResultsFilename + "\"...");
-			else
-				mainLog.println("below:\n");
+			ResultsExporter exporter = new ResultsExporter(exportResultsFormat, "string");
+			mainLog.print("\nExporting results " + (exportresultsmatrix ? "in matrix form " : ""));
+			mainLog.println(exportResultsFilename.equals("stdout") ? "below:\n" : "to file \"" + exportResultsFilename + "\"...");
 			PrismFileLog tmpLog = new PrismFileLog(exportResultsFilename);
 			if (!tmpLog.ready()) {
 				errorAndExit("Couldn't open file \"" + exportResultsFilename + "\" for output");
 			}
-
-			String sep = exportresultscsv ? ", " : "\t";
 			for (i = 0; i < numPropertiesToCheck; i++) {
 				if (i > 0)
 					tmpLog.println();
 				if (numPropertiesToCheck > 1) {
-					if (sep.equals(", "))
-						tmpLog.print("\"" + propertiesToCheck.get(i) + ":\"\n");
-					else
-						tmpLog.print(propertiesToCheck.get(i) + ":\n");
+					if (!exportresultsmatrix) {
+						exporter.setProperty(propertiesToCheck.get(i));
+					} else {
+						if (exportResultsFormat.equalsIgnoreCase("csv")) {
+							tmpLog.print( "\"" + propertiesToCheck.get(i).toString().replaceAll("\"", "\"\"") + "\"\n");
+						} else {
+							tmpLog.print(propertiesToCheck.get(i) + ":\n");
+						}
+					}
 				}
 				if (!exportresultsmatrix) {
-					tmpLog.println(results[i].toString(false, sep, sep));
+					tmpLog.println(results[i].export(exporter).getExportString());
 				} else {
+					String sep = exportResultsFormat.equals("plain") ? "\t" : ", ";
 					tmpLog.println(results[i].toStringMatrix(sep));
 				}
 			}
@@ -897,6 +916,20 @@ public class PrismCL implements PrismModelListener
 		techLog.close();
 	}
 
+	/** Set a timeout, exit program if timeout is reached */
+	private void setTimeout(final int timeout)
+	{
+		common.Timeout.setTimeout(timeout, new Runnable() {
+			@Override
+			public void run()
+			{
+				mainLog.println("\nError: Timeout (after " + timeout + " seconds).");
+				mainLog.flush();
+				System.exit(1);
+			}
+		});
+	}
+
 	// PrismModelListener methods
 
 	@Override
@@ -930,6 +963,9 @@ public class PrismCL implements PrismModelListener
 
 				// Remove "-"
 				sw = args[i].substring(1);
+				if (sw.length() == 0) {
+					errorAndExit("Invalid empty switch");
+				}
 				// Remove optional second "-" (i.e. we allow switches of the form --sw too)
 				if (sw.charAt(0) == '-')
 					sw = sw.substring(1);
@@ -949,6 +985,26 @@ public class PrismCL implements PrismModelListener
 						printHelp();
 					}
 					exit();
+				}
+				// java max mem
+				else if (sw.equals("javamaxmem")) {
+					i++;
+					// ignore - this is dealt with before java is launched
+				}
+				// timeout
+				else if (sw.equals("timeout")) {
+					if (i < args.length - 1) {
+						int timeout = PrismUtils.convertTimeStringtoSeconds(args[++i]);
+						if (timeout < 0) {
+							errorAndExit("Negative timeout value \"" + timeout + "\" for -" + sw + " switch");
+						}
+						if (timeout > 0) {
+							setTimeout(timeout);
+						}
+						// timeout == 0 -> no timeout
+					} else {
+						errorAndExit("Missing timeout value for -" + sw + " switch");
+					}
 				}
 				// print version
 				else if (sw.equals("version")) {
@@ -1052,6 +1108,22 @@ public class PrismCL implements PrismModelListener
 					test = true;
 					testExitsOnFail = false;
 				}
+				else if (sw.equals("dddebug")) {
+					jdd.DebugJDD.enable();
+				}
+				else if (sw.equals("ddtrace")) {
+					if (i < args.length - 1) {
+						String idString = args[++i];
+						try {
+							int id = Integer.parseInt(idString);
+							jdd.DebugJDD.enableTracingForID(id);
+						} catch (NumberFormatException e) {
+							errorAndExit("The -" + sw + " switch requires an integer argument (JDDNode ID)");
+						}
+					} else {
+						errorAndExit("The -" + sw + " switch requires an additional argument (JDDNode ID)");
+					}
+				}
 
 				// IMPORT OPTIONS:
 
@@ -1138,12 +1210,15 @@ public class PrismCL implements PrismModelListener
 						}
 						exportResultsFilename = halves[0];
 						String ss[] = halves[1].split(",");
+						exportResultsFormat = "plain";
 						for (j = 0; j < ss.length; j++) {
 							if (ss[j].equals("")) {
 							} else if (ss[j].equals("csv"))
-								exportresultscsv = true;
+								exportResultsFormat = "csv";
 							else if (ss[j].equals("matrix"))
 								exportresultsmatrix = true;
+							else if (ss[j].equals("comment"))
+								exportResultsFormat = "comment";
 							else
 								errorAndExit("Unknown option \"" + ss[j] + "\" for -" + sw + " switch");
 						}
@@ -1671,7 +1746,7 @@ public class PrismCL implements PrismModelListener
 			}
 			// Unknown extension
 			else {
-				throw new PrismException("Unknown extension \"" + ext + "\" for -exportmodel switch");
+				throw new PrismException("Unknown extension \"" + ext + "\" for -importmodel switch");
 			}
 			// Check at least the transition matrix was imported
 			if (!importtrans) {
@@ -1687,7 +1762,7 @@ public class PrismCL implements PrismModelListener
 			}
 			// Unknown option
 			else {
-				throw new PrismException("Unknown option \"" + opt + "\" for -exportmodel switch");
+				throw new PrismException("Unknown option \"" + opt + "\" for -importmodel switch");
 			}
 		}*/
 	}
@@ -1841,7 +1916,7 @@ public class PrismCL implements PrismModelListener
 	/**
 	 * Split a string of the form <files>:<options> into its two parts.
 	 * The latter can be empty, in which case the : is optional.
-	 * Instances of :\ are ignored (nor treated as :) in case there is a Windows filename.
+	 * Instances of :\ are ignored (not treated as :) in case there is a Windows filename.
 	 * @return the two parts as an array of two strings.
 	 */
 	private static String[] splitFilesAndOptions(String filesOptionsString)
@@ -2116,6 +2191,7 @@ public class PrismCL implements PrismModelListener
 		mainLog.println("-nobuild ....................... Skip model construction (just do parse/export)");
 		mainLog.println("-test .......................... Enable \"test\" mode");
 		mainLog.println("-testall ....................... Enable \"test\" mode, but don't exit on error");
+		mainLog.println("-javamaxmem .................... Set the maximum heap size for Java, e.g. 500m, 4g [default: 1g]");
 		mainLog.println();
 		mainLog.println("IMPORT OPTIONS:");
 		mainLog.println("-importpepa .................... Model description is in PEPA, not the PRISM language");
@@ -2206,7 +2282,7 @@ public class PrismCL implements PrismModelListener
 			mainLog.println("Switch: -importmodel <files>\n");
 			mainLog.println("Import the model directly from text file(s).");
 			mainLog.println("Use a list of file extensions to indicate which files should be read, e.g.:");
-			mainLog.println("\n -importmodel in.tra,in.sta\n");
+			mainLog.println("\n -importmodel in.tra,sta\n");
 			mainLog.println("Possible extensions are: .tra, .sta, .lab");
 			mainLog.println("Use extension .all to import all, e.g.:");
 			mainLog.println("\n -importmodel in.all\n");
@@ -2219,13 +2295,14 @@ public class PrismCL implements PrismModelListener
 			mainLog.println("If provided, <options> is a comma-separated list of options taken from:");
 			mainLog.println(" * csv - Export results as comma-separated values");
 			mainLog.println(" * matrix - Export results as one or more 2D matrices (e.g. for surface plots)");
+			mainLog.println(" * comment - Export results in comment format for regerssion testing)");
 		}
 		// -exportmodel
 		else if (sw.equals("exportmodel")) {
 			mainLog.println("Switch: -exportmodel <files[:options]>\n");
 			mainLog.println("Export the built model to file(s) (or to the screen if <file>=\"stdout\").");
 			mainLog.println("Use a list of file extensions to indicate which files should be generated, e.g.:");
-			mainLog.println("\n -exportmodel out.tra,out.sta\n");
+			mainLog.println("\n -exportmodel out.tra,sta\n");
 			mainLog.println("Possible extensions are: .tra, .srew, .trew, .sta, .lab");
 			mainLog.println("Use extension .all to export all and .rew to export both .srew/.trew, e.g.:");
 			mainLog.println("\n -exportmodel out.all\n");
@@ -2322,7 +2399,19 @@ public class PrismCL implements PrismModelListener
 
 	public static void main(String[] args)
 	{
-		new PrismCL().run(args);
+		// Normal operation: just run PrismCL
+		if (!(args.length > 0 && "-ng".equals(args[0]))) {
+			new PrismCL().go(args);
+		}
+		// Nailgun server mode (-ng switch)
+		else {
+			try {
+				System.out.println("Starting PRISM-Nailgun server...");
+				com.martiansoftware.nailgun.NGServer.main(new String[0]);
+			} catch (NumberFormatException | UnknownHostException e) {
+				System.out.println("Failed to launch Nailgun server: " + e);
+			}
+		}
 	}
 }
 

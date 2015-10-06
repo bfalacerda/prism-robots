@@ -41,7 +41,7 @@ public class ExpressionTemporal extends Expression
 	public static final int P_R = 6; // Release (for P operator)
 	public static final int R_C = 11; // Cumulative (for R operator)
 	public static final int R_I = 12; // Instantaneous (for R operator)
-	public static final int R_F = 13; // Reachability (for R operator)
+	public static final int R_F = 13; // Reachability (for R operator) // DEPRECATED: Use P_F
 	public static final int R_S = 14; // Steady-state (for R operator)
 	// Operator symbols
 	public static final String opSymbols[] = { "", "X", "U", "F", "G", "W", "R", "", "", "", "", "C", "I", "F", "S" };
@@ -91,7 +91,7 @@ public class ExpressionTemporal extends Expression
 	}
 
 	/**
-	 * Set lower time bound to be of form >= e
+	 * Set lower time bound to be of form &gt;= e
 	 * (null denotes no lower bound, i.e. zero)
 	 */
 	public void setLowerBound(Expression e)
@@ -100,7 +100,7 @@ public class ExpressionTemporal extends Expression
 	}
 
 	/**
-	 * Set lower time bound to be of form >= e or > e
+	 * Set lower time bound to be of form &gt;= e or &gt; e
 	 * (null denotes no lower bound, i.e. zero)
 	 */
 	public void setLowerBound(Expression e, boolean strict)
@@ -110,7 +110,7 @@ public class ExpressionTemporal extends Expression
 	}
 
 	/**
-	 * Set upper time bound to be of form <= e
+	 * Set upper time bound to be of form &lt;= e
 	 * (null denotes no upper bound, i.e. infinity)
 	 */
 	public void setUpperBound(Expression e)
@@ -119,7 +119,7 @@ public class ExpressionTemporal extends Expression
 	}
 
 	/**
-	 * Set upper time bound to be of form <= e or < e
+	 * Set upper time bound to be of form &lt;= e or &lt; e
 	 * (null denotes no upper bound, i.e. infinity)
 	 */
 	public void setUpperBound(Expression e, boolean strict)
@@ -205,9 +205,7 @@ public class ExpressionTemporal extends Expression
 
 	// Methods required for Expression:
 
-	/**
-	 * Is this expression constant?
-	 */
+	@Override
 	public boolean isConstant()
 	{
 		return false;
@@ -219,10 +217,7 @@ public class ExpressionTemporal extends Expression
 		return false;
 	}
 	
-	/**
-	 * Evaluate this expression, return result.
-	 * Note: assumes that type checking has been done already.
-	 */
+	@Override
 	public Object evaluate(EvaluateContext ec) throws PrismLangException
 	{
 		throw new PrismLangException("Cannot evaluate a temporal operator without a path");
@@ -236,17 +231,32 @@ public class ExpressionTemporal extends Expression
 
 	// Methods required for ASTElement:
 
-	/**
-	 * Visitor method.
-	 */
+	@Override
 	public Object accept(ASTVisitor v) throws PrismLangException
 	{
 		return v.visit(this);
 	}
 
-	/**
-	 * Convert to string.
-	 */
+	@Override
+	public Expression deepCopy()
+	{
+		ExpressionTemporal expr = new ExpressionTemporal();
+		expr.setOperator(op);
+		if (operand1 != null)
+			expr.setOperand1(operand1.deepCopy());
+		if (operand2 != null)
+			expr.setOperand2(operand2.deepCopy());
+		expr.setLowerBound(lBound == null ? null : lBound.deepCopy(), lBoundStrict);
+		expr.setUpperBound(uBound == null ? null : uBound.deepCopy(), uBoundStrict);
+		expr.equals = equals;
+		expr.setType(type);
+		expr.setPosition(this);
+		return expr;
+	}
+
+	// Standard methods
+
+	@Override
 	public String toString()
 	{
 		String s = "";
@@ -275,23 +285,61 @@ public class ExpressionTemporal extends Expression
 		return s;
 	}
 
-	/**
-	 * Perform a deep copy.
-	 */
-	public Expression deepCopy()
+	@Override
+	public int hashCode()
 	{
-		ExpressionTemporal expr = new ExpressionTemporal();
-		expr.setOperator(op);
-		if (operand1 != null)
-			expr.setOperand1(operand1.deepCopy());
-		if (operand2 != null)
-			expr.setOperand2(operand2.deepCopy());
-		expr.setLowerBound(lBound == null ? null : lBound.deepCopy(), lBoundStrict);
-		expr.setUpperBound(uBound == null ? null : uBound.deepCopy(), uBoundStrict);
-		expr.equals = equals;
-		expr.setType(type);
-		expr.setPosition(this);
-		return expr;
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + (equals ? 1231 : 1237);
+		result = prime * result + ((lBound == null) ? 0 : lBound.hashCode());
+		result = prime * result + (lBoundStrict ? 1231 : 1237);
+		result = prime * result + op;
+		result = prime * result + ((operand1 == null) ? 0 : operand1.hashCode());
+		result = prime * result + ((operand2 == null) ? 0 : operand2.hashCode());
+		result = prime * result + ((uBound == null) ? 0 : uBound.hashCode());
+		result = prime * result + (uBoundStrict ? 1231 : 1237);
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj)
+	{
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		ExpressionTemporal other = (ExpressionTemporal) obj;
+		if (equals != other.equals)
+			return false;
+		if (lBound == null) {
+			if (other.lBound != null)
+				return false;
+		} else if (!lBound.equals(other.lBound))
+			return false;
+		if (lBoundStrict != other.lBoundStrict)
+			return false;
+		if (op != other.op)
+			return false;
+		if (operand1 == null) {
+			if (other.operand1 != null)
+				return false;
+		} else if (!operand1.equals(other.operand1))
+			return false;
+		if (operand2 == null) {
+			if (other.operand2 != null)
+				return false;
+		} else if (!operand2.equals(other.operand2))
+			return false;
+		if (uBound == null) {
+			if (other.uBound != null)
+				return false;
+		} else if (!uBound.equals(other.uBound))
+			return false;
+		if (uBoundStrict != other.uBoundStrict)
+			return false;
+		return true;
 	}
 
 	// Other useful methods

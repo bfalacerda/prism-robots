@@ -47,6 +47,8 @@ public class SCCComputerTarjan extends SCCComputer
 	private int numNodes;
 	/* Computed list of SCCs */
 	private List<BitSet> sccs = new ArrayList<BitSet>();
+	/* States not in non-trivial SCCs */
+	private BitSet notInSCCs;
 	/* Computed list of BSCCs */
 	private List<BitSet> bsccs = new ArrayList<BitSet>();
 	/* States not in any BSCC */
@@ -82,13 +84,25 @@ public class SCCComputerTarjan extends SCCComputer
 	public void computeSCCs()
 	{
 		tarjan();
+		// Now remove trivial SCCs
+		notInSCCs = new BitSet();
+		for (Iterator<BitSet> it = sccs.iterator(); it.hasNext(); ) {
+			BitSet scc = it.next();
+			if (scc.cardinality() == 1) {
+				int s = scc.nextSetBit(0);
+				if (!model.someSuccessorsInSet(s, scc)) {
+					it.remove(); // remove this SCC from sccs list
+					notInSCCs.set(s);
+				}
+			}
+		}
 	}
 
 	@Override
 	public void computeBSCCs()
 	{
 		computeSCCs();
-		notInBSCCs = new BitSet();
+		notInBSCCs = (BitSet) getNotInSCCs().clone();
 		int n = sccs.size();
 		for (int i = 0; i < n; i++) {
 			BitSet scc = sccs.get(i);
@@ -112,6 +126,12 @@ public class SCCComputerTarjan extends SCCComputer
 		return sccs;
 	}
 
+	@Override
+	public BitSet getNotInSCCs()
+	{
+		return notInSCCs;
+	}
+	
 	@Override
 	public List<BitSet> getBSCCs()
 	{

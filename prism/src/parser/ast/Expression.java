@@ -26,9 +26,11 @@
 
 package parser.ast;
 
+import jltl2ba.SimpleLTL;
 import parser.*;
 import parser.visitor.*;
 import prism.ModelType;
+import prism.PrismException;
 import prism.PrismLangException;
 import parser.type.*;
 
@@ -703,6 +705,19 @@ public abstract class Expression extends ASTElement
 	}
 
 	/**
+	 * Test if an expression is a reachability path formula (F phi) 
+	 */
+	public static boolean isReach(Expression expr)
+	{
+		if (expr instanceof ExpressionTemporal) {
+			if (((ExpressionTemporal) expr).getOperator() == ExpressionTemporal.P_F) {
+				return ((ExpressionTemporal) expr).getOperand2().isProposition();
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Test if an expression contains time bounds on temporal operators 
 	 */
 	public static boolean containsTemporalTimeBounds(Expression expr)
@@ -712,10 +727,8 @@ public abstract class Expression extends ASTElement
 			{
 				public void visitPre(ExpressionTemporal e) throws PrismLangException
 				{
-					if (e.getLowerBound() != null)
-						throw new PrismLangException(e.getOperatorSymbol());
-					if (e.getUpperBound() != null)
-						throw new PrismLangException(e.getOperatorSymbol());
+					if (e.hasBounds())
+						throw new PrismLangException("");
 				}
 			});
 		} catch (PrismLangException e) {
@@ -748,11 +761,12 @@ public abstract class Expression extends ASTElement
 	/**
 	 * Test if an expression is an LTL formula and is in positive normal form,
 	 * i.e. where negation only occurs at the level of state formulae.
+	 * This means that the operators => and <=> are also disallowed. 
 	 */
 	public static boolean isPositiveNormalFormLTL(Expression expr)
 	{
 		// State formulae (negated or otherwise) are OK
-		if (expr.type instanceof TypeBool)
+		if (expr.getType() instanceof TypeBool)
 			return true;
 		// Otherwise recurse, looking for negations...
 		else if (expr instanceof ExpressionUnaryOp) {
@@ -769,7 +783,15 @@ public abstract class Expression extends ASTElement
 		}
 		else if (expr instanceof ExpressionBinaryOp) {
 			ExpressionBinaryOp exprBinOp = (ExpressionBinaryOp) expr;
-			return isPositiveNormalFormLTL(exprBinOp.getOperand1()) && isPositiveNormalFormLTL(exprBinOp.getOperand2());
+			int op = exprBinOp.getOperator();
+			switch (op) {
+			// => and <=> are not allowed
+			case ExpressionBinaryOp.IMPLIES:
+			case ExpressionBinaryOp.IFF:
+				return false;
+			default:
+				return isPositiveNormalFormLTL(exprBinOp.getOperand1()) && isPositiveNormalFormLTL(exprBinOp.getOperand2());
+			}
 		}
 		else if (expr instanceof ExpressionTemporal) {
 			ExpressionTemporal exprTemp = (ExpressionTemporal) expr;
@@ -787,13 +809,29 @@ public abstract class Expression extends ASTElement
 	
 	/**
 	 * Test if an expression is a co-safe LTL formula, detected syntactically
-	 * (i.e. if it is in positive normal form and only uses X, F and U. 
+	 * (i.e. if it is in positive normal form and only uses X, F and U).
 	 */
 	public static boolean isCoSafeLTLSyntactic(Expression expr)
 	{
-		// Check for positive normal form
-		if (!isPositiveNormalFormLTL(expr))
-			return false;
+		return isCoSafeLTLSyntactic(expr, false);
+	}
+
+	/**
+	 * Test if an expression is a co-safe LTL formula, detected syntactically
+	 * (i.e. if it is in positive normal form and only uses X, F and U).
+	 * If {@code convert} is true, the expression is first converted into positive normal form,
+	 * and then it is checked whether it only uses X, F and U.
+	 * For example, a => ! (G b) would return true if (and only if) {@code convert} was true.
+	 */
+	public static boolean isCoSafeLTLSyntactic(Expression expr, boolean convert)
+	{
+		// Convert to or check for positive normal form
+		if (convert) {
+			expr = BooleanUtils.convertLTLToPositiveNormalForm(expr.deepCopy());
+		} else {
+			if (!isPositiveNormalFormLTL(expr))
+				return false;
+		}
 		// Check temporal operators
 		try {
 			ASTTraverse astt = new ASTTraverse()
@@ -887,6 +925,43 @@ public abstract class Expression extends ASTElement
 		}
 
 		return expr;
+	}
+
+	/**
+	 * Create a property expression (an LTL formula) from the classes used by the jltl2ba (and jltl2dstar) libraries.
+	 */
+	public static Expression createFromJltl2ba(SimpleLTL ltl) throws PrismException
+	{
+		switch (ltl.kind) {
+		case AND:
+			return Expression.And(createFromJltl2ba(ltl.left), createFromJltl2ba(ltl.right));
+		case AP:
+			return new ExpressionLabel(ltl.ap);
+		case EQUIV:
+			return Expression.Iff(createFromJltl2ba(ltl.left), createFromJltl2ba(ltl.right));
+		case FALSE:
+			return Expression.False();
+		case FINALLY:
+			return new ExpressionTemporal(ExpressionTemporal.P_F, null, createFromJltl2ba(ltl.left));
+		case GLOBALLY:
+			return new ExpressionTemporal(ExpressionTemporal.P_G, null, createFromJltl2ba(ltl.left));
+		case IMPLIES:
+			return Expression.Implies(createFromJltl2ba(ltl.left), createFromJltl2ba(ltl.right));
+		case NEXT:
+			return new ExpressionTemporal(ExpressionTemporal.P_X, null, createFromJltl2ba(ltl.left));
+		case NOT:
+			return Expression.Not(createFromJltl2ba(ltl.left));
+		case OR:
+			return Expression.Or(createFromJltl2ba(ltl.left), createFromJltl2ba(ltl.right));
+		case RELEASE:
+			return new ExpressionTemporal(ExpressionTemporal.P_R, createFromJltl2ba(ltl.left), createFromJltl2ba(ltl.right));
+		case TRUE:
+			return Expression.True();
+		case UNTIL:
+			return new ExpressionTemporal(ExpressionTemporal.P_U, createFromJltl2ba(ltl.left), createFromJltl2ba(ltl.right));
+		default:
+			throw new PrismException("Cannot convert jltl2ba formula " + ltl);
+		}
 	}
 }
 

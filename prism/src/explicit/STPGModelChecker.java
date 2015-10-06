@@ -36,6 +36,7 @@ import prism.PrismComponent;
 import prism.PrismException;
 import prism.PrismFileLog;
 import prism.PrismLog;
+import prism.PrismNotSupportedException;
 import prism.PrismUtils;
 import explicit.rewards.STPGRewards;
 
@@ -51,15 +52,15 @@ public class STPGModelChecker extends ProbModelChecker
 	{
 		super(parent);
 	}
-	
+
 	// Model checking functions
 
 	@Override
 	protected StateValues checkProbPathFormulaLTL(Model model, Expression expr, boolean qual, MinMax minMax, BitSet statesOfInterest) throws PrismException
 	{
-		throw new PrismException("LTL model checking not yet supported for stochastic games");
+		throw new PrismNotSupportedException("LTL model checking not yet supported for stochastic games");
 	}
-	
+
 	// Numerical computation functions
 
 	/**
@@ -67,7 +68,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * i.e. compute the probability of being in a state in {@code target} in the next step.
 	 * @param stpg The STPG
 	 * @param target Target states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public ModelCheckerResult computeNextProbs(STPG stpg, BitSet target, boolean min1, boolean min2) throws PrismException
@@ -78,7 +79,7 @@ public class STPGModelChecker extends ProbModelChecker
 		long timer;
 
 		timer = System.currentTimeMillis();
-		
+
 		// Store num states
 		n = stpg.getNumStates();
 
@@ -102,7 +103,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * i.e. compute the min/max probability of reaching a state in {@code target}.
 	 * @param stpg The STPG
 	 * @param target Target states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public ModelCheckerResult computeReachProbs(STPG stpg, BitSet target, boolean min1, boolean min2) throws PrismException
@@ -117,7 +118,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param remain Remain in these states (optional: null means "all")
 	 * @param target Target states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public ModelCheckerResult computeUntilProbs(STPG stpg, BitSet remain, BitSet target, boolean min1, boolean min2) throws PrismException
@@ -132,7 +133,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param remain Remain in these states (optional: null means "all")
 	 * @param target Target states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 * @param init Optionally, an initial solution vector (may be overwritten) 
 	 * @param known Optionally, a set of states for which the exact answer is known
@@ -230,7 +231,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param remain Remain in these states (optional: null means "all")
 	 * @param target Target states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public BitSet prob0(STPG stpg, BitSet remain, BitSet target, boolean min1, boolean min2)
@@ -302,7 +303,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param remain Remain in these states (optional: null means "all")
 	 * @param target Target states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public BitSet prob1(STPG stpg, BitSet remain, BitSet target, boolean min1, boolean min2)
@@ -380,7 +381,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param no Probability 0 states
 	 * @param yes Probability 1 states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 * @param init Optionally, an initial solution vector (will be overwritten) 
 	 * @param known Optionally, a set of states for which the exact answer is known
@@ -473,7 +474,7 @@ public class STPGModelChecker extends ProbModelChecker
 			msg += "\nConsider using a different numerical method or increasing the maximum number of iterations";
 			throw new PrismException(msg);
 		}
-		
+
 		// Print adversary
 		if (genAdv) {
 			PrismLog out = new PrismFileLog(exportAdvFilename);
@@ -497,7 +498,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param no Probability 0 states
 	 * @param yes Probability 1 states
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 * @param init Optionally, an initial solution vector (will be overwritten) 
 	 * @param known Optionally, a set of states for which the exact answer is known
@@ -573,7 +574,7 @@ public class STPGModelChecker extends ProbModelChecker
 			msg += "\nConsider using a different numerical method or increasing the maximum number of iterations";
 			throw new PrismException(msg);
 		}
-		
+
 		// Return results
 		res = new ModelCheckerResult();
 		res.soln = soln;
@@ -605,7 +606,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param stpg The STPG
 	 * @param target Target states
 	 * @param k Bound
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public ModelCheckerResult computeBoundedReachProbs(STPG stpg, BitSet target, int k, boolean min1, boolean min2) throws PrismException
@@ -621,7 +622,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param remain Remain in these states (optional: null means "all")
 	 * @param target Target states
 	 * @param k Bound
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 */
 	public ModelCheckerResult computeBoundedUntilProbs(STPG stpg, BitSet remain, BitSet target, int k, boolean min1, boolean min2) throws PrismException
@@ -637,7 +638,7 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param remain Remain in these states (optional: null means "all")
 	 * @param target Target states
 	 * @param k Bound
-	 * @param min1 Min or max probabilities for player 1 (true=lower bound, false=upper bound)
+	 * @param min1 Min or max probabilities for player 1 (true=min, false=max)
 	 * @param min2 Min or max probabilities for player 2 (true=min, false=max)
 	 * @param init Initial solution vector - pass null for default
 	 * @param results Optional array of size k+1 to store (init state) results for each step (null if unused)
@@ -740,7 +741,8 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param known Optionally, a set of states for which the exact answer is known
 	 * Note: if 'known' is specified (i.e. is non-null, 'init' must also be given and is used for the exact values.  
 	 */
-	public ModelCheckerResult computeReachRewards(STPG stpg, STPGRewards rewards, BitSet target, boolean min1, boolean min2, double init[], BitSet known) throws PrismException
+	public ModelCheckerResult computeReachRewards(STPG stpg, STPGRewards rewards, BitSet target, boolean min1, boolean min2, double init[], BitSet known)
+			throws PrismException
 	{
 		ModelCheckerResult res = null;
 		BitSet inf;
@@ -812,8 +814,8 @@ public class STPGModelChecker extends ProbModelChecker
 	 * @param known Optionally, a set of states for which the exact answer is known
 	 * Note: if 'known' is specified (i.e. is non-null, 'init' must also be given and is used for the exact values.
 	 */
-	protected ModelCheckerResult computeReachRewardsValIter(STPG stpg, STPGRewards rewards, BitSet target, BitSet inf, boolean min1, boolean min2, double init[], BitSet known)
-			throws PrismException
+	protected ModelCheckerResult computeReachRewardsValIter(STPG stpg, STPGRewards rewards, BitSet target, BitSet inf, boolean min1, boolean min2,
+			double init[], BitSet known) throws PrismException
 	{
 		ModelCheckerResult res;
 		BitSet unknown;
@@ -886,7 +888,7 @@ public class STPGModelChecker extends ProbModelChecker
 			msg += "\nConsider using a different numerical method or increasing the maximum number of iterations";
 			throw new PrismException(msg);
 		}
-		
+
 		// Return results
 		res = new ModelCheckerResult();
 		res.soln = soln;

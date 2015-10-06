@@ -43,6 +43,7 @@ import prism.PrismComponent;
 import prism.PrismException;
 import prism.PrismLog;
 import prism.PrismPrintStreamLog;
+import prism.PrismNotSupportedException;
 import prism.ProgressDisplay;
 import prism.UndefinedConstants;
 import simulator.SimulatorEngine;
@@ -162,20 +163,24 @@ public class ConstructModel extends PrismComponent
 			switch (modelType) {
 			case DTMC:
 				modelSimple = dtmc = new DTMCSimple();
+				dtmc.setVarList(varList);
 				break;
 			case CTMC:
 				modelSimple = ctmc = new CTMCSimple();
+				ctmc.setVarList(varList);
 				break;
 			case MDP:
 				modelSimple = mdp = new MDPSimple();
+				mdp.setVarList(varList);
 				break;
 			case CTMDP:
 				modelSimple = ctmdp = new CTMDPSimple();
+				ctmdp.setVarList(varList);
 				break;
 			case STPG:
 			case SMG:
 			case PTA:
-				throw new PrismException("Model construction not supported for " + modelType + "s");
+				throw new PrismNotSupportedException("Model construction not supported for " + modelType + "s");
 			}
 		}
 
@@ -254,7 +259,7 @@ public class ConstructModel extends PrismComponent
 						case STPG:
 						case SMG:
 						case PTA:
-							throw new PrismException("Model construction not supported for " + modelType + "s");
+							throw new PrismNotSupportedException("Model construction not supported for " + modelType + "s");
 						}
 					}
 				}
@@ -331,7 +336,7 @@ public class ConstructModel extends PrismComponent
 			case STPG:
 			case SMG:
 			case PTA:
-				throw new PrismException("Model construction not supported for " + modelType + "s");
+				throw new PrismNotSupportedException("Model construction not supported for " + modelType + "s");
 			}
 			model.setStatesList(statesList);
 			model.setConstantValues(new Values(modulesFile.getConstantValues()));

@@ -26,9 +26,12 @@
 
 package acceptance;
 
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.BitSet;
 
+import prism.PrismException;
+import prism.PrismNotSupportedException;
 import jdd.JDDVars;
 
 /**
@@ -58,7 +61,10 @@ public class AcceptanceStreett
 		/** State set G */
 		private BitSet G;
 
-		/** Constructor with R and G state sets */
+		/**
+		 * Constructor with R and G state sets.
+		 * 	 (G F "R") -> (G F "G")
+		 */
 		public StreettPair(BitSet R, BitSet G)
 		{
 			this.R = R;
@@ -96,6 +102,17 @@ public class AcceptanceStreett
 				// no R visited, no need to check for G
 				return true;
 			}
+		}
+
+		public AcceptanceGeneric toAcceptanceGeneric()
+		{
+			AcceptanceGeneric genericR = new AcceptanceGeneric(AcceptanceGeneric.ElementType.FIN, (BitSet)R.clone());
+			AcceptanceGeneric genericG = new AcceptanceGeneric(AcceptanceGeneric.ElementType.INF, (BitSet)G.clone());
+			//      G F "R" -> G F "G"
+			// <=>  ! G F "R"  | G F "G"
+			// <=>  F G ! "R"  | G F "G"
+			// <=>  Fin(R) | Inf(G)
+			return new AcceptanceGeneric(AcceptanceGeneric.ElementType.OR, genericR, genericG);
 		}
 
 		/** Generate signature for this Streett pair and the given state.
@@ -168,7 +185,7 @@ public class AcceptanceStreett
 	 * any word that is accepted by this condition is rejected by the returned Rabin condition.
 	 * @return the complement Rabin acceptance condition
 	 */
-	public AcceptanceRabin complement()
+	public AcceptanceRabin complementToRabin()
 	{
 		AcceptanceRabin accRabin = new AcceptanceRabin();
 
@@ -180,6 +197,16 @@ public class AcceptanceStreett
 		}
 		return accRabin;
 	}
+	
+	@Override
+	public AcceptanceOmega complement(int numStates, AcceptanceType... allowedAcceptance) throws PrismException
+	{
+		if (AcceptanceType.contains(allowedAcceptance, AcceptanceType.RABIN)) {
+			return complementToRabin();
+		}
+		throw new PrismNotSupportedException("Can not complement " + getTypeName() + " acceptance to a supported acceptance type");
+	}
+
 
 	/**
 	 * Returns a new Streett acceptance condition that corresponds to the conjunction
@@ -206,6 +233,24 @@ public class AcceptanceStreett
 		return new AcceptanceStreettDD(this, ddRowVars);
 	}
 
+	@Override
+	public AcceptanceGeneric toAcceptanceGeneric()
+	{
+		if (size() == 0) {
+			return new AcceptanceGeneric(true);
+		}
+		AcceptanceGeneric genericPairs = null;
+		for (StreettPair pair : this) {
+			AcceptanceGeneric genericPair = pair.toAcceptanceGeneric();
+			if (genericPairs == null) {
+				genericPairs = genericPair;
+			} else {
+				genericPairs = new AcceptanceGeneric(AcceptanceGeneric.ElementType.AND, genericPairs, genericPair);
+			}
+		}
+		return genericPairs;
+	}
+
 	/**
 	 * Get the acceptance signature for state stateIndex.
 	 **/
@@ -217,6 +262,27 @@ public class AcceptanceStreett
 			StreettPair pair = get(pairIndex);
 			result += pair.getSignatureForState(stateIndex,  pairIndex);
 		}
+
+		return result;
+	}
+
+	@Override
+	public String getSignatureForStateHOA(int stateIndex)
+	{
+		String result = "";
+
+		for (int pairIndex=0; pairIndex<size(); pairIndex++) {
+			StreettPair pair = get(pairIndex);
+			if (pair.getR().get(stateIndex)) {
+				result += (result.isEmpty() ? "" : " ") + pairIndex*2;
+			}
+			if (pair.getG().get(stateIndex)) {
+				result += (result.isEmpty() ? "" : " ") + (pairIndex*2+1);
+			}
+		}
+
+		if (!result.isEmpty())
+			result = "{"+result+"}";
 
 		return result;
 	}
@@ -253,5 +319,22 @@ public class AcceptanceStreett
 	public String getTypeName()
 	{
 		return "Streett";
+	}
+
+	@Override
+	public void outputHOAHeader(PrintStream out)
+	{
+		out.println("acc-name: Streett "+size());
+		out.print("Acceptance: " + (size()*2)+" ");
+		if (size() == 0) {
+			out.println("t");
+			return;
+		}
+
+		for (int pair = 0; pair < size(); pair++) {
+			if (pair > 0) out.print(" & ");
+			out.print("( Fin(" + (2*pair) + ") | Inf(" + (2*pair+1) +") )");
+		}
+		out.println();
 	}
 }

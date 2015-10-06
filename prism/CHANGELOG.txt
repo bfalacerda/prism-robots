@@ -1,13 +1,47 @@
 This file contains details of the changes in each new version of PRISM.
 
-Latest changes: (up to rev 9654)
+Recent changes: (up to svn rev 10687)
 
-* -exact switch
-* -exportpropaut (hidden)
-* Some LTL model checking optimisations
-* Expected total rewards (R[C]) implemented for DTMCs in symbolic engine.
-* lower time-bounds supported for DTMCs/MDPs
-* -pathviaautomata switch
+* Timeout feature (-timeout switch)
+* Built-in support for Nailgun client/server
+* Allow -exportpropaut to export DA in HOA format (-exportpropaut:hoa da.hoa)
+* Debugging options: -dddebug and -ddtrace command-line switches
+* Allow -javamaxmem switch for GUI as well as command line
+* Better error handling when CUDD runs out of memory
+* Partial support for multi-objective queries expressed as Boolean expressions
+* Allow <<>> and [[]] operators for MDP (only * or empty), all engines
+* Model checking of expected reward to satisfy a co-safe LTL formula, all engines
+* Performance improvements in explicit engine
+* prism-auto: new options (--show-warnings, --nailgun, --ngprism), multiple -x switches
+* Bug fixes
+
+-----------------------------------------------------------------------------
+Version 4.3 (first released 14/7/2015)
+-----------------------------------------------------------------------------
+
+* Support for external LTL-to-automata converters via the HOA format
+  - including model checking for Generalised Rabin (GR) conditions
+
+* New model checking functionality/optimisations
+  - lower time-bounds for properties of DTMCs/MDPs (e.g. P=? [ F>=2 "target" ])
+  - expected total rewards (R[C]) implemented for DTMCs
+  - backwards reachability algorithm implemented for model checking PTAs
+  - exact (arbitrary precision) model checking via the parametric engine (experimental)
+  - various LTL model checking optimisations
+  - faster precomputation by pre-computing predecessors (explicit engine)
+
+* Options/switches:
+  - new -pathviaautomata switch to force model checking via automaton construction
+  - new "comment" option for exporting results (exports in regression test format)
+  - new -javamaxmem switch (equivalent to setting PRISM_JAVAMAXMEM)
+  - more convenient format for CUDD max memory setting (125k, 50m, 4g, etc.)
+  - higher default values for CUDD/Java memory limits
+  
+* Additional functionality in prism-auto testing/benchmarking script
+  - export testing, .auto files, debug mode, colouring, custom model files, ...
+  
+* New sbml2prism script
+
 * Bug fixes
 
 -----------------------------------------------------------------------------

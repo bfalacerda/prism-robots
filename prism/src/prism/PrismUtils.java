@@ -26,9 +26,14 @@
 
 package prism;
 
+import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Various general-purpose utility methods in Java
@@ -177,7 +182,7 @@ public class PrismUtils
 		return formatterPercent1dp.format(frac);
 	}
 
-	private static DecimalFormat formatterPercent1dp = new DecimalFormat("#0.0%");
+	private static DecimalFormat formatterPercent1dp = new DecimalFormat("#0.0%", DecimalFormatSymbols.getInstance(Locale.UK));
 
 	/**
 	 * Format a double to 2 decimal places.
@@ -187,7 +192,7 @@ public class PrismUtils
 		return formatterDouble2dp.format(d);
 	}
 
-	private static DecimalFormat formatterDouble2dp = new DecimalFormat("#0.00");
+	private static DecimalFormat formatterDouble2dp = new DecimalFormat("#0.00", DecimalFormatSymbols.getInstance(Locale.UK));
 
 	/**
 	 * Format a double, as would be done by printf's %.12g
@@ -200,7 +205,7 @@ public class PrismUtils
 	}
 
 	/**
-	 * Format a double, as would be done by printf's %.<prec>g
+	 * Format a double, as would be done by printf's %.(prec)g
 	 */
 	public static String formatDouble(int prec, double d)
 	{
@@ -211,7 +216,7 @@ public class PrismUtils
 	
 	/**
 	 * Create a string for a list of objects, with a specified separator,
-	 * e.g. ["a","b","c"], "," -> "a,b,c"
+	 * e.g. ["a","b","c"], "," -&gt; "a,b,c"
 	 */
 	public static String joinString(List<?> objs, String separator)
 	{
@@ -230,7 +235,7 @@ public class PrismUtils
 	
 	/**
 	 * Create a string for an array of objects, with a specified separator,
-	 * e.g. ["a","b","c"], "," -> "a,b,c"
+	 * e.g. ["a","b","c"], "," -&gt; "a,b,c"
 	 */
 	public static String joinString(Object[] objs, String separator)
 	{
@@ -282,6 +287,104 @@ public class PrismUtils
 			}
 		}
 		return firstCycle;
+	}
+
+	/**
+	 * Convert a string representing an amount of memory (e.g. 125k, 50m, 4g) to the value in KB.
+	 * If the letter prefix is omitted, we assume it is "k" (i.e. KB).
+	 */
+	public static long convertMemoryStringtoKB(String mem) throws PrismException
+	{
+		Pattern p = Pattern.compile("([0-9]+)([kmg]?)");
+		Matcher m = p.matcher(mem);
+		if (!m.matches()) {
+			throw new PrismException("Invalid amount of memory \"" + mem + "\"");
+		}
+		long num;
+		try {
+			num = Long.parseLong(m.group(1));
+		} catch (NumberFormatException e) {
+			throw new PrismException("Invalid amount of memory \"" + mem + "\"");
+		}
+		switch (m.group(2)) {
+		case "":
+		case "k":
+			return num;
+		case "m":
+			return num * 1024;
+		case "g":
+			return num * (1024 * 1024);
+		default:
+			// Shouldn't happen
+			throw new PrismException("Invalid amount of memory \"" + mem + "\"");
+		}
+	}
+
+	/**
+	 * Convert a string representing an amount of time (e.g. 5s, 5m, 5h, 5d, 5w) to the value
+	 * in seconds.
+	 * If the unit is omitted, we assume it is seconds.
+	 */
+	public static int convertTimeStringtoSeconds(String time) throws PrismException
+	{
+		Pattern p = Pattern.compile("([0-9]+)([smhdw]?)");
+		Matcher m = p.matcher(time);
+		if (!m.matches()) {
+			throw new PrismException("Invalid time value \"" + time + "\"");
+		}
+		int value;
+		try {
+			value = Integer.parseInt(m.group(1));
+		} catch (NumberFormatException e) {
+			throw new PrismException("Invalid time value \"" + time + "\"");
+		}
+		switch (m.group(2)) {
+		case "":
+		case "s":  // seconds
+			return value;
+		case "m":  // minutes
+			return value * 60;
+		case "h":  // hours
+			return value * (60 * 60);
+		case "d":  // days
+			return value * (24 * 60 * 60);
+		case "w":  // weeks
+			return value * (7 * 24 * 60 * 60);
+		default:
+			// Shouldn't happen
+			throw new PrismException("Invalid time value \"" + time + "\"");
+		}
+	}
+
+	/**
+	 * Convert a number of bytes to a string representing the amount of memory (e.g. 125k, 50m, 4g).
+	 */
+	public static String convertBytesToMemoryString(long bytes) throws PrismException
+	{
+		String units[] = { "b", "k", "m", "g" };
+		for (int i = 3; i > 0; i--) {
+			long pow = 1 << (i * 10);
+			if (bytes >= pow) {
+				return (bytes % pow == 0 ? (bytes / pow) : String.format(Locale.UK, "%.1f", ((double) bytes) / pow)) + units[i];
+			}
+		}
+		return bytes + units[0];
+		
+		/*for (String s : new String[] { "1g", "1500m", "2g", "1000m", "1024m", "1" }) {
+			System.out.println(s + " => " + PrismUtils.convertMemoryStringtoKB(s) * 1024 + " => " + PrismUtils.convertBytesToMemoryString(PrismUtils.convertMemoryStringtoKB(s) * 1024));
+		}*/
+	}
+	
+	/**
+	 * Utility method to create a new PrintStream for a file, but any errors are converted to PrismExceptions
+	 */
+	public static PrintStream newPrintStream(String filename) throws PrismException
+	{
+		try {
+			return new PrintStream(filename);
+		} catch (FileNotFoundException e) {
+			throw new PrismException("File \"" + filename + "\" could not opened for output");
+		}
 	}
 }
 

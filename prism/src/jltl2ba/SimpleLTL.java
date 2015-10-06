@@ -27,6 +27,11 @@
 
 package jltl2ba;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import jltl2dstar.APMonom;
 import jltl2dstar.NBA;
 import prism.PrismException;
@@ -587,7 +592,49 @@ public class SimpleLTL {
 		}
 		return rv;
 	}
-	
+
+	/**
+	 * Returns an equivalent SimpleLTL formula with a
+	 * basic set of operators:
+	 *   AP, TRUE, FALSE, AND, OR, NOT, UNTIL, FINALLY, GLOBALLY, NEXT
+	 */
+	public SimpleLTL toBasicOperators() {
+		switch (kind) {
+		case AP:
+		case TRUE:
+		case FALSE:
+			return this;
+		case AND:
+		case OR:
+		case UNTIL:
+			return new SimpleLTL(kind, left.toBasicOperators(), right.toBasicOperators());
+		case FINALLY:
+		case GLOBALLY:
+		case NEXT:
+		case NOT:
+			return new SimpleLTL(kind, left.toBasicOperators());
+		case EQUIV: {
+			SimpleLTL newLeft = left.toBasicOperators();
+			SimpleLTL newRight = right.toBasicOperators();
+			SimpleLTL bothTrue = new SimpleLTL(LTLType.AND, newLeft, newRight);
+			SimpleLTL bothFalse = new SimpleLTL(LTLType.AND,
+			                                    new SimpleLTL(LTLType.NOT, newLeft),
+			                                    new SimpleLTL(LTLType.NOT, newRight));
+			return new SimpleLTL(LTLType.OR, bothTrue, bothFalse);
+		}
+		case IMPLIES: {
+			SimpleLTL newLeft = new SimpleLTL(LTLType.NOT, left.toBasicOperators());
+			return new SimpleLTL(LTLType.OR, newLeft, right.toBasicOperators());
+		}
+		case RELEASE: {
+			SimpleLTL newLeft = new SimpleLTL(LTLType.NOT, left.toBasicOperators());
+			SimpleLTL newRight = new SimpleLTL(LTLType.NOT, right.toBasicOperators());
+			return new SimpleLTL(LTLType.UNTIL, newLeft, newRight);
+		}
+		}
+		throw new UnsupportedOperationException("Unknown operator in SimpleLTL");
+	}
+
 	public SimpleLTL negate() {
 		return new SimpleLTL(LTLType.NOT, this);
 	}
@@ -934,6 +981,297 @@ public class SimpleLTL {
 			return new APMonom(true);
 		default:
 			throw new PrismException("Formula not in DNF!");
+		}
+	}
+
+	/**
+	 * Renames the atomic propositions apparing in the formula that
+	 * start with {@code prefixFrom}. For these, the prefix is replaced
+	 * by prefixTo. For example, with prefixFrom = "L" and prefixTo = "p",
+	 * "L3" will be renamed to "p3", but "T2" will be left as-is.
+	 */
+	public void renameAP(String prefixFrom, String prefixTo)
+	{
+		switch (kind) {
+		case AP:
+			if (ap.startsWith(prefixFrom)) {
+				ap = prefixTo + ap.substring(prefixFrom.length());
+			}
+			return;
+		case AND:
+		case OR:
+		case EQUIV:
+		case IMPLIES:
+		case RELEASE:
+		case UNTIL:
+			left.renameAP(prefixFrom, prefixTo);
+			right.renameAP(prefixFrom, prefixTo);
+			return;
+		case FINALLY:
+		case GLOBALLY:
+		case NEXT:
+		case NOT:
+			left.renameAP(prefixFrom, prefixTo);
+			return;
+		case TRUE:
+		case FALSE:
+			return;
+		}
+		throw new UnsupportedOperationException("Unknown operator in SimpleLTL formula: "+this);
+	}
+	
+	/**
+	 * Render this LTL formula in LBT syntax, i.e., in prefix notation.
+	 */
+	public String toStringLBT()
+	{
+		String rv = "";
+
+		switch (kind) {
+		case OR:
+			rv = "| " + left.toStringLBT() + " " + right.toStringLBT();
+			break;
+		case AND:
+			rv = "& " + left.toStringLBT() + " " + right.toStringLBT();
+			break;
+		case UNTIL:
+			rv = "U " + left.toStringLBT() + " " + right.toStringLBT();
+			break;
+		case RELEASE:
+			rv = "V " + left.toStringLBT() + " " + right.toStringLBT();
+			break;
+		case IMPLIES:
+			rv = "i " + left.toStringLBT() + " " + right.toStringLBT();
+			break;
+		case EQUIV:
+			rv = "e " + left.toStringLBT() + " " + right.toStringLBT();
+			break;
+		case NEXT:
+			rv = "X " + left.toStringLBT();
+			break;
+		case FINALLY:
+			rv = "F " + left.toStringLBT();
+			break;
+		case GLOBALLY:
+			rv = "G " + left.toStringLBT();
+			break;
+		case NOT:
+			rv = "! " + left.toStringLBT();
+			break;
+		case FALSE:
+			rv = "f";
+			break;
+		case TRUE:
+			rv = "t";
+			break;
+		case AP:
+			rv = ap;
+			break;
+		default:
+			rv = null;
+		}
+		return rv;
+	}
+
+	/**
+	 * Render this LTL formula in Spin syntax.
+	 */
+	public String toStringSpin()
+	{
+		String rv = "";
+
+		switch (kind) {
+		case OR:
+			rv = "(" + left.toStringSpin() + ") || (" + right.toStringSpin() + ")";
+			break;
+		case AND:
+			rv = "(" + left.toStringSpin() + ") && (" + right.toStringSpin() + ")";
+			break;
+		case UNTIL:
+			rv = "(" + left.toStringSpin() + ") U (" + right.toStringSpin() + ")";
+			break;
+		case RELEASE:
+			rv = "(" + left.toStringSpin() + ") V (" + right.toStringSpin() + ")";
+			break;
+		case IMPLIES:
+			rv = "(" + left.toStringSpin() + ") -> (" + right.toStringSpin() + ")";
+			break;
+		case EQUIV:
+			rv = "(" + left.toStringSpin() + ") <-> (" + right.toStringSpin() + ")";
+			break;
+		case NEXT:
+			rv = "X (" + left.toStringSpin() + ")";
+			break;
+		case FINALLY:
+			rv = "<> (" + left.toStringSpin() + ")";
+			break;
+		case GLOBALLY:
+			rv = "[] (" + left.toStringSpin() + ")";
+			break;
+		case NOT:
+			rv = "! (" + left.toStringSpin() + ")";
+			break;
+		case FALSE:
+			rv = "false";
+			break;
+		case TRUE:
+			rv = "true";
+			break;
+		case AP:
+			rv = ap;
+			break;
+		default:
+			rv = null;
+		}
+		return rv;
+	}
+
+	
+	/**
+	 * Render this LTL formula in Spot syntax.
+	 */
+	public String toStringSpot()
+	{
+		String rv = "";
+
+		switch (kind) {
+		case OR:
+			rv = "(" + left.toStringSpot() + ") | (" + right.toStringSpot() + ")";
+			break;
+		case AND:
+			rv = "(" + left.toStringSpot() + ") & (" + right.toStringSpot() + ")";
+			break;
+		case UNTIL:
+			rv = "(" + left.toStringSpot() + ") U (" + right.toStringSpot() + ")";
+			break;
+		case RELEASE:
+			rv = "(" + left.toStringSpot() + ") R (" + right.toStringSpot() + ")";
+			break;
+		case IMPLIES:
+			rv = "(" + left.toStringSpot() + ") -> (" + right.toStringSpot() + ")";
+			break;
+		case EQUIV:
+			rv = "(" + left.toStringSpot() + ") <-> (" + right.toStringSpot() + ")";
+			break;
+		case NEXT:
+			rv = "X (" + left.toStringSpot() + ")";
+			break;
+		case FINALLY:
+			rv = "F (" + left.toStringSpot() + ")";
+			break;
+		case GLOBALLY:
+			rv = "G (" + left.toStringSpot() + ")";
+			break;
+		case NOT:
+			rv = "! (" + left.toStringSpot() + ")";
+			break;
+		case FALSE:
+			rv = "false";
+			break;
+		case TRUE:
+			rv = "true";
+			break;
+		case AP:
+			rv = ap;
+			break;
+		default:
+			rv = null;
+		}
+		return rv;
+	}
+
+	/** Parse a formula in LBT (prefix format) */
+	public static SimpleLTL parseFormulaLBT(String formula) throws Exception
+	{
+		formula=formula.trim();  // remove leading, trailing spaces
+		String[] split = formula.split("[ ]+");
+		List<String> formulaList = new ArrayList<String>();
+		for (String s : split) formulaList.add(s);
+
+		// set up operator -> SimpleLTL.LTLType mapping for the standard operators
+		Map<String, SimpleLTL.LTLType> unaryOps  = new HashMap<String, SimpleLTL.LTLType>();
+		Map<String, SimpleLTL.LTLType> binaryOps = new HashMap<String, SimpleLTL.LTLType>();
+		unaryOps.put("!", SimpleLTL.LTLType.NOT);
+		unaryOps.put("F", SimpleLTL.LTLType.FINALLY);
+		unaryOps.put("G", SimpleLTL.LTLType.GLOBALLY);
+		unaryOps.put("X", SimpleLTL.LTLType.NEXT);
+		binaryOps.put("|", SimpleLTL.LTLType.OR);
+		binaryOps.put("&", SimpleLTL.LTLType.AND);
+		binaryOps.put("i", SimpleLTL.LTLType.IMPLIES);
+		binaryOps.put("e", SimpleLTL.LTLType.EQUIV);
+		binaryOps.put("U", SimpleLTL.LTLType.UNTIL);
+		binaryOps.put("V", SimpleLTL.LTLType.RELEASE);
+
+		SimpleLTL result = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+
+		if (formulaList.size()>0) {
+			String remainingFormula = "";
+			for (String op : formulaList) remainingFormula += " "+op;
+			throw new RuntimeException("Malformed formula, extra information after end of formula: "+remainingFormula);
+		}
+		return result;
+	}
+
+	/**
+	 * Parse a formula in LBT format, where the formula is already split into a list of operators / APs
+	 * @param formulaList sequence of operators / APs
+	 * @param unaryOps map for the standard unary ops
+	 * @param binaryOps map for the standard binary ops
+	 * @throws RuntimeException on parse error
+	 */
+	private static SimpleLTL parseFormulaLBT(List<String> formulaList,
+	                                         Map<String, SimpleLTL.LTLType> unaryOps,
+	                                         Map<String, SimpleLTL.LTLType> binaryOps) throws RuntimeException
+	{
+		if (formulaList.size() == 0) {
+			throw new RuntimeException("Malformed formula, premature ending");
+		}
+		String current = formulaList.get(0);
+		formulaList.remove(0);
+
+		if (current.equals("t")) {
+			return new SimpleLTL(true);
+		} else if (current.equals("f")) {
+			return new SimpleLTL(false);
+		} else if (unaryOps.containsKey(current)) {
+			// standard unary op
+			SimpleLTL operand = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+			return new SimpleLTL(unaryOps.get(current), operand);
+		} else if (binaryOps.containsKey(current)) {
+			// standard binary op
+			SimpleLTL operand1 = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+			SimpleLTL operand2 = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+			return new SimpleLTL(binaryOps.get(current), operand1, operand2);
+		} else if (current.equals("W")) {
+			// a W b == !(a&!b U !a&!b)
+			SimpleLTL operand1 = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+			SimpleLTL operand2 = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+
+			SimpleLTL aAndNotb =
+			   new SimpleLTL(SimpleLTL.LTLType.AND, operand1.clone(),
+			     new SimpleLTL(SimpleLTL.LTLType.NOT, operand2.clone()));
+			
+			SimpleLTL NotaAndNotb =
+			   new SimpleLTL(SimpleLTL.LTLType.AND,
+			     new SimpleLTL(SimpleLTL.LTLType.NOT, operand1.clone()),
+			     new SimpleLTL(SimpleLTL.LTLType.NOT, operand2.clone()));
+
+			return new SimpleLTL(SimpleLTL.LTLType.NOT,
+			   new SimpleLTL(SimpleLTL.LTLType.UNTIL, aAndNotb, NotaAndNotb));
+		} else if (current.equals("^")) {
+			// a xor b == !(a equiv b)
+			SimpleLTL operand1 = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+			SimpleLTL operand2 = parseFormulaLBT(formulaList, unaryOps, binaryOps);
+
+			return new SimpleLTL(SimpleLTL.LTLType.NOT,
+			    new SimpleLTL(SimpleLTL.LTLType.EQUIV, operand1, operand2));
+		} else if (current.equals("M") || current.equals("B")) {
+			throw new RuntimeException("Operator "+current+" currently not supported.");
+		} else if (current.matches("[a-zA-Z].*")) {
+			// atomic proposition
+			return new SimpleLTL(current);
+		} else {
+			throw new RuntimeException("Illegal/unsupported operator: "+current);
 		}
 	}
 

@@ -75,14 +75,18 @@ public class ECComputerDefault extends ECComputer
 	}
 
 	@Override
+	public void computeMECStates(BitSet restrict, BitSet accept) throws PrismException
+	{
+		mecs = findEndComponents(restrict, accept);
+	}
+
+	@Override
 	public List<BitSet> getMECStates()
 	{
 		return mecs;
 	}
 
 	// Computation
-
-	// TODO: handle 'accept'
 	
 	/**
 	 * Find all accepting maximal end components (MECs) in the submodel obtained
@@ -103,10 +107,10 @@ public class ECComputerDefault extends ECComputer
 		}
 		// Initialise L with set of all states to look in (if non-empty)
 		List<BitSet> L = new ArrayList<BitSet>();
-		if (restrict.cardinality() == 0)
+		if (restrict.isEmpty())
 			return L;
 		L.add(restrict);
-		
+		// Find MECs
 		boolean changed = true;
 		while (changed) {
 			changed = false;
@@ -116,7 +120,17 @@ public class ECComputerDefault extends ECComputer
 			L = replaceEWithSCCs(L, E, sccs);
 			changed = canLBeChanged(L, E);
 		}
-
+		// Filter and return those that contain a state in accept
+		if (accept != null) {
+			int i = 0;
+			while (i < L.size()) {
+				if (!L.get(i).intersects(accept)) {
+					L.remove(i);
+				} else {
+					i++;
+				}
+			}
+		}
 		return L;
 	}
 
@@ -167,7 +181,7 @@ public class ECComputerDefault extends ECComputer
 							act.set(j);
 						}
 					}
-					if (act.cardinality() == 0) {
+					if (act.isEmpty()) {
 						states.clear(i);
 						changed = true;
 					}
@@ -203,7 +217,7 @@ public class ECComputerDefault extends ECComputer
 
 	private boolean isMEC(BitSet b)
 	{
-		if (b.cardinality() == 0)
+		if (b.isEmpty())
 			return false;
 
 		int state = b.nextSetBit(0);

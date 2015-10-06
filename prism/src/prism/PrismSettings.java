@@ -31,6 +31,7 @@ package prism;
 import java.util.*;
 import java.io.*;
 import java.awt.*;
+
 import javax.swing.*;
 
 import explicit.QuantAbstractRefine;
@@ -76,6 +77,7 @@ public class PrismSettings implements Observer
 	public static final	String PRISM_PRECOMPUTATION					= "prism.precomputation";
 	public static final	String PRISM_PROB0							= "prism.prob0";
 	public static final	String PRISM_PROB1							= "prism.prob1";
+	public static final	String PRISM_PRE_REL					= "prism.preRel";
 	public static final	String PRISM_FIX_DEADLOCKS					= "prism.fixDeadlocks";
 	public static final	String PRISM_DO_PROB_CHECKS					= "prism.doProbChecks";
 	public static final	String PRISM_SUM_ROUND_OFF					= "prism.sumRoundOff";
@@ -99,6 +101,7 @@ public class PrismSettings implements Observer
 	public static final	String PRISM_EXTRA_REACH_INFO				= "prism.extraReachInfo";
 	public static final String PRISM_SCC_METHOD						= "prism.sccMethod";
 	public static final String PRISM_SYMM_RED_PARAMS					= "prism.symmRedParams";
+	public static final	String PRISM_EXACT_ENABLED					= "prism.exact.enabled";
 	public static final String PRISM_PTA_METHOD					= "prism.ptaMethod";
 	public static final String PRISM_TRANSIENT_METHOD				= "prism.transientMethod";
 	public static final String PRISM_AR_OPTIONS					= "prism.arOptions";
@@ -110,7 +113,8 @@ public class PrismSettings implements Observer
 	public static final	String PRISM_PARETO_EPSILON					= "prism.paretoEpsilon";
 	public static final	String PRISM_EXPORT_PARETO_FILENAME			= "prism.exportParetoFileName";
 	
-	public static final	String PRISM_EXACT_ENABLED					= "prism.exact.enabled";
+	public static final String PRISM_LTL2DA_TOOL					= "prism.ltl2daTool";
+	public static final String PRISM_LTL2DA_SYNTAX					= "prism.ltl2daSyntax";
 	
 	public static final	String PRISM_PARAM_ENABLED					= "prism.param.enabled";
 	public static final	String PRISM_PARAM_PRECISION				= "prism.param.precision";
@@ -219,7 +223,10 @@ public class PrismSettings implements Observer
 			// ENGINES/METHODS:
 			{ CHOICE_TYPE,		PRISM_ENGINE,							"Engine",								"2.1",			"Hybrid",																	"MTBDD,Sparse,Hybrid,Explicit",																		
 																			"Which engine (hybrid, sparse, MTBDD, explicit) should be used for model checking." },
-			{ CHOICE_TYPE,		PRISM_PTA_METHOD,						"PTA model checking method",			"3.3",			"Stochastic games",																	"Digital clocks,Stochastic games",																
+			{ BOOLEAN_TYPE,		PRISM_EXACT_ENABLED,					"Do exact model checking",			"4.2.1",			new Boolean(false),															"",
+																			"Perform exact model checking." },
+																			
+			{ CHOICE_TYPE,		PRISM_PTA_METHOD,						"PTA model checking method",			"3.3",			"Stochastic games",																	"Digital clocks,Stochastic games,Backwards reachability",																
 																			"Which method to use for model checking of PTAs." },
 			{ CHOICE_TYPE,		PRISM_TRANSIENT_METHOD,					"Transient probability computation method",	"3.3",		"Uniformisation",															"Uniformisation,Fast adaptive uniformisation",																
 																			"Which method to use for computing transient probabilities in CTMCs." },
@@ -245,6 +252,8 @@ public class PrismSettings implements Observer
 																			"Whether to use model checking precomputation algorithm Prob0 (if precomputation enabled)." },
 			{ BOOLEAN_TYPE,		PRISM_PROB1,							"Use Prob1 precomputation",				"4.0.2",		new Boolean(true),															"",																							
 																			"Whether to use model checking precomputation algorithm Prob1 (if precomputation enabled)." },
+			{ BOOLEAN_TYPE,		PRISM_PRE_REL,							"Use predecessor relation",		"4.2.1",		new Boolean(true),											"",
+																			"Whether to use a pre-computed predecessor relation in several algorithms." },
 			{ BOOLEAN_TYPE,		PRISM_FAIRNESS,							"Use fairness",							"2.1",			new Boolean(false),															"",																							
 																			"Constrain to fair adversaries when model checking MDPs." },
 			{ BOOLEAN_TYPE,		PRISM_FIX_DEADLOCKS,					"Automatically fix deadlocks",			"4.0.3",		new Boolean(true),															"",																							
@@ -288,8 +297,8 @@ public class PrismSettings implements Observer
 																			"Number of MTBDD levels descended for hybrid engine data structures block division with GS/SOR." },
 			{ INTEGER_TYPE,		PRISM_SOR_MAX_MEM,						"Hybrid GS memory (KB)",				"2.1",			new Integer(1024),															"0,",																						
 																			"Maximum memory usage for hybrid engine data structures block division with GS/SOR (KB)." },
-			{ INTEGER_TYPE,		PRISM_CUDD_MAX_MEM,						"CUDD max. memory (KB)",				"2.1",			new Integer(409600),														"0,",																						
-																			"Maximum memory available to CUDD (underlying BDD/MTBDD library) in KB (Note: Restart PRISM after changing this.)" },
+			{ STRING_TYPE,		PRISM_CUDD_MAX_MEM,						"CUDD max. memory",				"4.2.1",			new String("1g"),														"",																						
+																			"Maximum memory available to CUDD (underlying BDD/MTBDD library), e.g. 125k, 50m, 4g. Note: Restart PRISM after changing this." },
 			{ DOUBLE_TYPE,		PRISM_CUDD_EPSILON,						"CUDD epsilon",							"2.1",			new Double(1.0E-15),														"0.0,",																						
 																			"Epsilon value used by CUDD (underlying BDD/MTBDD library) for terminal cache comparisons." },
 			// ADVERSARIES/COUNTEREXAMPLES:
@@ -298,10 +307,13 @@ public class PrismSettings implements Observer
 			{ STRING_TYPE,		PRISM_EXPORT_ADV_FILENAME,				"Adversary export filename",			"3.3",			"adv.tra",																	"",															
 																			"Name of file for MDP adversary export (if enabled)" },
 																		
-			// EXACT MODEL CHECKING
-			{ BOOLEAN_TYPE,		PRISM_EXACT_ENABLED,					"Do exact model checking",			"4.2.1",			new Boolean(false),															"",
-																			"Perform exact model checking." },
-			
+			// LTL2DA TOOLS
+			{ STRING_TYPE,		PRISM_LTL2DA_TOOL,						"Use external LTL->DA tool",		"4.2.1",			"",		null,
+																			"If non-empty, the path to the executable for the external LTL->DA tool."},
+
+			{ CHOICE_TYPE,		PRISM_LTL2DA_SYNTAX,					"LTL syntax for external LTL->DA tool",		"4.2.1",			"LBT",		"LBT,Spin,Spot,Rabinizer",
+																			"The syntax for LTL formulas passed to the external LTL->DA tool."},
+
 			// PARAMETRIC MODEL CHECKING
 			{ BOOLEAN_TYPE,		PRISM_PARAM_ENABLED,					"Do parametric model checking",			"4.1",			new Boolean(false),															"",
 																			"Perform parametric model checking." },
@@ -811,11 +823,17 @@ public class PrismSettings implements Observer
 	
 	// Export property automaton info?
 	protected boolean exportPropAut = false;
+	protected String exportPropAutType = null;
 	protected String exportPropAutFilename = null;
 	
 	public void setExportPropAut(boolean b) throws PrismException
 	{
 		exportPropAut = b;
+	}
+
+	public void setExportPropAutType(String s) throws PrismException
+	{
+		exportPropAutType = s;
 	}
 
 	public void setExportPropAutFilename(String s) throws PrismException
@@ -826,6 +844,11 @@ public class PrismSettings implements Observer
 	public boolean getExportPropAut()
 	{
 		return exportPropAut;
+	}
+
+	public String getExportPropAutType()
+	{
+		return exportPropAutType;
 	}
 
 	public String getExportPropAutFilename()
@@ -843,16 +866,15 @@ public class PrismSettings implements Observer
 	 */
 	public synchronized int setFromCommandLineSwitch(String args[], int i) throws PrismException
 	{
-		String sw, s;
+		String s;
 		int j;
 		double d;
 		
-		// Remove "-"
-		sw = args[i].substring(1);
-		// Remove optional second "-" (i.e. we allow switches of the form --sw too)
-		if (sw.charAt(0) == '-')
-			sw = sw.substring(1);
-
+		// Process string (remove - and extract any options) 
+		Pair<String, Map<String, String>> pair = splitSwitch(args[i]);
+		String sw = pair.first;
+		Map<String, String> options = pair.second; 
+		
 		// Note: the order of these switches should match the -help output (just to help keep track of things).
 		
 		// ENGINES/METHODS:
@@ -870,6 +892,10 @@ public class PrismSettings implements Observer
 		else if (sw.equals("explicit") || sw.equals("ex")) {
 			set(PRISM_ENGINE, "Explicit");
 		}
+		// Exact model checking
+		else if (sw.equals("exact")) {
+			set(PRISM_EXACT_ENABLED, true);
+		}
 		// PTA model checking methods
 		else if (sw.equals("ptamethod")) {
 			if (i < args.length - 1) {
@@ -878,8 +904,8 @@ public class PrismSettings implements Observer
 					set(PRISM_PTA_METHOD, "Digital clocks");
 				else if (s.equals("games"))
 					set(PRISM_PTA_METHOD, "Stochastic games");
-				else if (s.equals("bisim"))
-					set(PRISM_PTA_METHOD, "Bisimulation minimisation");
+				else if (s.equals("backwards") || s.equals("bw"))
+					set(PRISM_PTA_METHOD, "Backwards reachability");
 				else
 					throw new PrismException("Unrecognised option for -" + sw + " switch (options are: digital, games)");
 			} else {
@@ -1001,6 +1027,10 @@ public class PrismSettings implements Observer
 		}
 		else if (sw.equals("noprob1")) {
 			set(PRISM_PROB1, false);
+		}
+		// Use predecessor relation? (e.g. for precomputation)
+		else if (sw.equals("noprerel")) {
+			set(PRISM_PRE_REL, false);
 		}
 		// Fix deadlocks on/off
 		else if (sw.equals("fixdl")) {
@@ -1204,14 +1234,7 @@ public class PrismSettings implements Observer
 		// CUDD settings
 		else if (sw.equals("cuddmaxmem")) {
 			if (i < args.length - 1) {
-				try {
-					j = Integer.parseInt(args[++i]);
-					if (j < 0)
-						throw new NumberFormatException();
-					set(PRISM_CUDD_MAX_MEM, j);
-				} catch (NumberFormatException e) {
-					throw new PrismException("Invalid value for -" + sw + " switch");
-				}
+				set(PRISM_CUDD_MAX_MEM, args[++i]);
 			} else {
 				throw new PrismException("No value specified for -" + sw + " switch");
 			}
@@ -1252,12 +1275,39 @@ public class PrismSettings implements Observer
 			}
 		}
 		
-		// EXACT MODEL CHECKING:
+		// LTL2DA TOOLS
 		
-		else if (sw.equals("exact")) {
-			set(PRISM_EXACT_ENABLED, true);
+		else if (sw.equals("ltl2datool")) {
+			if (i < args.length - 1) {
+				String filename = args[++i];
+				set(PRISM_LTL2DA_TOOL, filename);
+			} else {
+				throw new PrismException("The -" + sw + " switch requires one argument (path to the executable)");
+			}
 		}
-		
+		else if (sw.equals("ltl2dasyntax")) {
+			if (i < args.length - 1) {
+				String syntax = args[++i];
+				switch (syntax) {
+				case "lbt":
+					set(PRISM_LTL2DA_SYNTAX, "LBT");
+					break;
+				case "spin":
+					set(PRISM_LTL2DA_SYNTAX, "Spin");
+					break;
+				case "spot":
+					set(PRISM_LTL2DA_SYNTAX, "Spot");
+				case "rabinizer":
+					set(PRISM_LTL2DA_SYNTAX, "Rabinizer");
+					break;
+				default:
+					throw new PrismException("Unrecognised option for -" + sw + " switch (options are: lbt, spin, spot, rabinizer)");
+				}
+			} else {
+				throw new PrismException("The -" + sw + " switch requires one argument (options are: lbt, spin, spot, rabinizer)");
+			}
+		}
+
 		// PARAMETRIC MODEL CHECKING:
 		
 		else if (sw.equals("param")) {
@@ -1443,6 +1493,18 @@ public class PrismSettings implements Observer
 			if (i < args.length - 1) {
 				setExportPropAut(true);
 				setExportPropAutFilename(args[++i]);
+				setExportPropAutType("txt");  // default
+				for (Map.Entry<String, String> option : options.entrySet()) {
+				    if (option.getKey().equals("txt")) {
+						setExportPropAutType("txt");
+				    } else if (option.getKey().equals("dot")) {
+						setExportPropAutType("dot");
+				    } else if (option.getKey().equals("hoa")) {
+						setExportPropAutType("hoa");
+				    } else {
+				    		throw new PrismException("Unknown option \"" + option.getKey() + "\" for -" + sw + " switch"); 
+				    }
+				}
 			} else {
 				throw new PrismException("No file specified for -" + sw + " switch");
 			}
@@ -1457,6 +1519,40 @@ public class PrismSettings implements Observer
 	}
 	
 	/**
+	 * Split a switch of the form -switch:options into parts.
+	 * The latter can be empty, in which case the : is optional.
+	 * When present, the options is a comma-separated list of "option" or "option=value" items.
+	 * The switch itself can be prefixed with either 1 or 2 hyphens.
+	 * 
+	 * @return a pair containing the switch name and a mapping from options to values.  
+	 */
+	private static Pair<String, Map<String, String>> splitSwitch(String sw) throws PrismException
+	{
+		// Remove "-"
+		sw = sw.substring(1);
+		// Remove optional second "-" (i.e. we allow switches of the form --sw too)
+		if (sw.charAt(0) == '-')
+			sw = sw.substring(1);
+		// Extract options, if present
+		int i = sw.indexOf(':');
+		Map<String,String> map = new HashMap<String, String>();
+		if (i != -1) {
+			String optionsString = sw.substring(i + 1);
+			sw = sw.substring(0, i);
+			String options[] = optionsString.split(",");
+			for (String option : options) {
+				int j = option.indexOf("=");
+				if (j == -1) {
+					map.put(option, null);
+				} else {
+					map.put(option.substring(0,j), option.substring(j+1));
+				}
+			}
+		}
+		return new Pair<String, Map<String,String>>(sw, map);
+	}
+
+	/**
 	 * Print a fragment of the -help message,
 	 * i.e. a list of the command-line switches handled by this class.
 	 */
@@ -1468,7 +1564,8 @@ public class PrismSettings implements Observer
 		mainLog.println("-sparse (or -s) ................ Use the Sparse engine");
 		mainLog.println("-hybrid (or -h) ................ Use the Hybrid engine [default]");
 		mainLog.println("-explicit (or -ex) ............. Use the explicit engine");
-		mainLog.println("-ptamethod <name> .............. Specify PTA engine (games, digital) [default: games]");
+		mainLog.println("-exact ......................... Perform exact (arbitrary precision) model checking");
+		mainLog.println("-ptamethod <name> .............. Specify PTA engine (games, digital, backwards) [default: games]");
 		mainLog.println("-transientmethod <name> ........ CTMC transient analysis methof (unif, fau) [default: unif]");
 		mainLog.println();
 		mainLog.println("SOLUTION METHODS (LINEAR EQUATIONS):");
@@ -1501,6 +1598,7 @@ public class PrismSettings implements Observer
 		mainLog.println("-nopre ......................... Skip precomputation algorithms (where optional)");
 		mainLog.println("-noprob0 ....................... Skip precomputation algorithm Prob0 (where optional)");
 		mainLog.println("-noprob1 ....................... Skip precomputation algorithm Prob1 (where optional)");
+		mainLog.println("-noprerel ...................... Do not pre-compute/use predecessor relation, e.g. for precomputation");
 		mainLog.println("-fair .......................... Use fairness (for model checking of MDPs)");
 		mainLog.println("-nofair ........................ Don't use fairness (for model checking of MDPs) [default]");
 		mainLog.println("-fixdl ......................... Automatically put self-loops in deadlock states [default]");
@@ -1515,6 +1613,9 @@ public class PrismSettings implements Observer
 		mainLog.println("-pathviaautomata ............... Handle all path formulas via automata constructions");
 		mainLog.println("-exportadv <file> .............. Export an adversary from MDP model checking (as a DTMC)");
 		mainLog.println("-exportadvmdp <file> ........... Export an adversary from MDP model checking (as an MDP)");
+		mainLog.println("-ltl2datool <exec> ............. Run executable <exec> to convert LTL formulas to deterministic automata");
+		mainLog.println("-ltl2dasyntax <x> .............. Specify output format for -ltl2datool switch (lbt, spin, spot, rabinizer)");
+		
 		mainLog.println();
 		mainLog.println("MULTI-OBJECTIVE MODEL CHECKING:");
 		mainLog.println("-linprog (or -lp) .............. Use linear programming for multi-objective model checking");
@@ -1533,7 +1634,7 @@ public class PrismSettings implements Observer
 		mainLog.println("-sbmax <n> ..................... Set memory limit (KB) (for hybrid engine) [default: 1024]");
 		mainLog.println("-gsl <n> (or sorl <n>) ......... Set number of levels for hybrid GS/SOR [default: -1]");
 		mainLog.println("-gsmax <n> (or sormax <n>) ..... Set memory limit (KB) for hybrid GS/SOR [default: 1024]");
-		mainLog.println("-cuddmaxmem <n> ................ Set max memory for CUDD package (KB) [default: 200x1024]");
+		mainLog.println("-cuddmaxmem <n> ................ Set max memory for CUDD package, e.g. 125k, 50m, 4g [default: 1g]");
 		mainLog.println("-cuddepsilon <x> ............... Set epsilon value for CUDD package [default: 1e-15]");
 		mainLog.println();
 		mainLog.println("PARAMETRIC MODEL CHECKING OPTIONS:");

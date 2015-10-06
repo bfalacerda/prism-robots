@@ -28,11 +28,18 @@
 package explicit;
 
 import java.util.BitSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
 
 import parser.type.TypeBool;
 import parser.type.TypeDouble;
 import parser.type.TypeInt;
 import prism.PrismException;
+import prism.PrismNotSupportedException;
+import explicit.rewards.MDPRewards;
+import explicit.rewards.MDPRewardsSimple;
+import explicit.rewards.StateRewardsConstant;
 
 /**
  * Base class for the results of a product operation between a model and
@@ -126,7 +133,7 @@ public abstract class Product<M extends Model> implements ModelTransformation<M,
 	 * over states in the product model: A bit is set in the
 	 * result for a product state if the bit is set in the parameter
 	 * for the corresponding original model state.
-	 * @param automataStates a BitSet over states of the automaton for this product.
+	 * @param modelStates a BitSet over states of the original model for this product.
 	 */
 	public BitSet liftFromModel(BitSet modelStates)
 	{
@@ -140,6 +147,41 @@ public abstract class Product<M extends Model> implements ModelTransformation<M,
 
 		return result;
 	}
+
+	/**
+	 * Calculate the progression reward from the automaton distance metric
+	 * @param distsToAcc List of automaton distances to goal
+	 * @return the product mdp progression reward
+	 */	
+	public MDPRewards liftProgressionFromAutomaton(List<Double> distsToAcc)
+	{
+		MDP productMDP = (MDP)productModel;
+		int numStates = productMDP.getNumStates();
+		MDPRewardsSimple rewSimple = new MDPRewardsSimple(numStates);
+		double currentStateDistance;
+		Iterator<Entry<Integer, Double>> transitions;
+		Entry<Integer, Double> transition;
+		double rewardValue;
+		int nextState;
+		
+		for (int productState = 0; productState < numStates; productState++) {
+			currentStateDistance = distsToAcc.get(getAutomatonState(productState));
+			int numChoices = productMDP.getNumChoices(productState);
+			for (int i = 0; i < numChoices; i++) {
+				transitions = productMDP.getTransitionsIterator(productState, i);
+				rewardValue=0.0;
+				while(transitions.hasNext()) {
+					transition = transitions.next();
+					nextState = transition.getKey();
+					rewardValue = rewardValue + transition.getValue()*distsToAcc.get(getAutomatonState(nextState));					
+				}
+				rewardValue = Math.max(currentStateDistance - rewardValue, 0.0);
+				rewSimple.setTransitionReward(productState, i, rewardValue);
+			}
+		}				
+		return rewSimple;
+	}
+	
 
 	/**
 	 * Project state values from the product model back to the original model. This function
@@ -168,7 +210,7 @@ public abstract class Product<M extends Model> implements ModelTransformation<M,
 			} else if (sv.type instanceof TypeDouble) {
 				result.setDoubleValue(modelState, (Double) sv.getValue(productState));
 			} else {
-				throw new PrismException("Handling for type "+sv.type+" not implemented.");
+				throw new PrismNotSupportedException("Handling for type "+sv.type+" not implemented.");
 			}
 		}
 

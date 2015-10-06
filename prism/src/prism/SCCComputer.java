@@ -49,6 +49,7 @@ public abstract class SCCComputer extends PrismComponent
 	// stuff for SCCs
 	protected Vector<JDDNode> sccs;
 	protected JDDNode notInSCCs;
+	protected JDDNode trivialSCCs;
 	// stuff for BSCCs
 	protected Vector<JDDNode> bsccs;
 	protected JDDNode notInBSCCs;
@@ -58,7 +59,7 @@ public abstract class SCCComputer extends PrismComponent
 	 */
 	public static SCCComputer createSCCComputer(PrismComponent parent, Model model) throws PrismException
 	{
-		return createSCCComputer(parent, model.getReach(), model.getTrans01(), model.getAllDDRowVars(), model.getAllDDColVars());
+		return createSCCComputer(parent, model.getReach(), model.getTransReln(), model.getAllDDRowVars(), model.getAllDDColVars());
 	}
 
 	/**
@@ -106,21 +107,25 @@ public abstract class SCCComputer extends PrismComponent
 	}
 
 	/**
-	 * Compute strongly connected components (SCCs) and store them.
-	 * They can be retrieved using {@link #getSCCs()} and {@link #getNotInSCCs()}.
-	 * You will need to to deref these afterwards.
+	 * Compute (non-trivial) strongly connected components (SCCs) and store them.
+	 * They should be retrieved using {@link #getSCCs()}.
+	 * States in trivial SCCs (those comprising a single state without a self-loop) are also stored.
+	 * They should be retrieved using {@link #getNotInSCCs()}.
+	 * You will need to to deref all of these afterwards.
 	 */
 	public abstract void computeSCCs() throws PrismException;
 
 	/**
-	 * Compute strongly connected components (SCCs) containing a state from {@code filter} and store them.
-	 * They can be retrieved using {@link #getSCCs()} and {@link #getNotInSCCs()}.
-	 * You will need to to deref these afterwards.
+	 * Compute (non-trivial) strongly connected components (SCCs) containing a state from {@code filter} and store them.
+	 * They should be retrieved using {@link #getSCCs()}.
+	 * States in trivial SCCs (those comprising a single state without a self-loop) are also stored.
+	 * They should be retrieved using {@link #getNotInSCCs()}.
+	 * You will need to to deref all of these afterwards.
 	 */
 	public abstract void computeSCCs(JDDNode filter) throws PrismException;
 
 	/**
-	 * Get the list of computed SCCs.
+	 * Get the list of computed (non-trivial) SCCs.
 	 * You need to deref these BDDs when you are finished with them.
 	 */
 	public List<JDDNode> getSCCs()
@@ -129,8 +134,8 @@ public abstract class SCCComputer extends PrismComponent
 	}
 
 	/**
-	 * Get the states not in any SCC.
-	 * Are there any? Hmmm.
+	 * Get the states not in any (non-trivial) SCC.
+	 * In other words, this is all states in trivial SCCs (those comprising a single state without a self-loop).
 	 * You need to deref this BDD when you are finished with it.
 	 */
 	public JDDNode getNotInSCCs()
@@ -148,8 +153,8 @@ public abstract class SCCComputer extends PrismComponent
 	}
 
 	/**
-	 * Get the states not in any SCC.
-	 * You need to deref these BDDs when you are finished with them.
+	 * Get the states not in any BSCC.
+	 * You need to deref this BDDs when you are finished with it.
 	 */
 	public JDDNode getNotInBSCCs()
 	{
@@ -158,8 +163,10 @@ public abstract class SCCComputer extends PrismComponent
 
 	/**
 	 * Compute bottom strongly connected components (BSCCs) and store them.
-	 * They can be retrieved using {@link #getBSCCs()} and {@link #getNotInBSCCs()}.
-	 * You will need to to deref these afterwards.
+	 * They should be retrieved using {@link #getBSCCs()}.
+	 * States that are not in any BSCC are also stored.
+	 * They should be retrieved using {@link #getNotInBSCCs()}.
+	 * You will need to to deref all of these afterwards.
 	 */
 	public void computeBSCCs() throws PrismException
 	{
@@ -169,7 +176,7 @@ public abstract class SCCComputer extends PrismComponent
 		// First compute SCCs
 		computeSCCs();
 
-		// Now check which ones are bsccs and keep them
+		// Now check which ones are BSCCs and keep them
 		bsccs = new Vector<JDDNode>();
 		notInBSCCs = notInSCCs;
 		n = sccs.size();
@@ -190,14 +197,20 @@ public abstract class SCCComputer extends PrismComponent
 			JDD.Deref(out);
 		}
 
-		// print out some info
-		mainLog.print("\nSCCs: " + sccs.size()); // note: contents of vectSCCs derefed but array exiists
+		// Print out some info
+		mainLog.print("\nSCCs: " + sccs.size()); // Note: the BDDs in sccs have been derefed but the array still exists
 		mainLog.print(", BSCCs: " + bsccs.size());
 		mainLog.println(", non-BSCC states: " + JDD.GetNumMintermsString(notInBSCCs, allDDRowVars.n()));
-		mainLog.print("BSCC sizes:");
-		for (i = 0; i < bsccs.size(); i++) {
-			mainLog.print(" " + (i + 1) + ":" + JDD.GetNumMintermsString(bsccs.elementAt(i), allDDRowVars.n()));
+
+		boolean verbose = getSettings().getBoolean(PrismSettings.PRISM_VERBOSE);
+		if (!verbose && bsccs.size() > 10) {
+			mainLog.print("BSCC sizes: More than 10 BSCCs, use verbose mode to view sizes for all.\n");
+		} else {
+			mainLog.print("BSCC sizes:");
+			for (i = 0; i < bsccs.size(); i++) {
+				mainLog.print(" " + (i + 1) + ":" + JDD.GetNumMintermsString(bsccs.elementAt(i), allDDRowVars.n()));
+			}
+			mainLog.println();
 		}
-		mainLog.println();
 	}
 }

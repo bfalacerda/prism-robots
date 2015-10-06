@@ -29,6 +29,7 @@
 package prism;
 
 import java.io.FileNotFoundException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -36,6 +37,8 @@ import java.util.List;
 import java.util.Vector;
 
 import acceptance.AcceptanceRabin;
+import automata.DA;
+import automata.LTL2DA;
 import parser.ast.Expression;
 import parser.ast.RelOp;
 import dv.DoubleVector;
@@ -91,12 +94,8 @@ public class MultiObjModelChecker extends PrismComponent
 		if (prism.getSettings().getExportPropAut()) {
 			String exportPropAutFilename = PrismUtils.addCounterSuffixToFilename(prism.getSettings().getExportPropAutFilename(), i + 1);
 			mainLog.println("Exporting DRA to file \"" + exportPropAutFilename + "\"...");
-			PrismLog out = new PrismFileLog(exportPropAutFilename);
-			out.println(dra[i]);
-			try {
-				dra[i].printDot(new java.io.PrintStream(exportPropAutFilename + ".dot"));
-			} catch (FileNotFoundException e) {
-			}
+			PrintStream out = PrismUtils.newPrintStream(exportPropAutFilename);
+			dra[i].print(out, settings.getExportPropAutType());
 			out.close();
 		}
 
@@ -117,7 +116,7 @@ public class MultiObjModelChecker extends PrismComponent
 	 * 
 	 * @param modelProduct
 	 * @param rewardsIndex
-	 * @param relOpsReward
+	 * @param opsAndBounds
 	 * @return True if some transitions were removed
 	 */
 	protected boolean removeNonZeroRewardTrans(NondetModel modelProduct, List<JDDNode> rewardsIndex, OpsAndBoundsList opsAndBounds)
@@ -220,7 +219,7 @@ public class MultiObjModelChecker extends PrismComponent
 		// TODO: check if the model satisfies the LTL constraints 
 		if (!rmecs.equals(JDD.ZERO)) {
 			boolean constraintViolated = false;
-			if (JDD.AreInterecting(modelProduct.getStart(), rmecs)) {
+			if (JDD.AreIntersecting(modelProduct.getStart(), rmecs)) {
 				constraintViolated = true;
 				JDD.Deref(rmecs);
 			} else {
@@ -644,12 +643,12 @@ public class MultiObjModelChecker extends PrismComponent
 		
 		try {
 			if (engine != Prism.SPARSE)
-				throw new PrismException("Currently only sparse engine supports multi-objective properties");
+				throw new PrismNotSupportedException("Currently only sparse engine supports multi-objective properties");
 		
 			if (method == Prism.MDP_MULTI_LP) {
 				//LP currently does not support Pareto
 				if (opsAndBounds.numberOfNumerical() > 1) {
-					throw new PrismException("Linear programming method currently does not support generating of Pareto curves.");
+					throw new PrismNotSupportedException("Linear programming method currently does not support generating of Pareto curves.");
 				}
 				
 				if (opsAndBounds.rewardSize() > 0) {

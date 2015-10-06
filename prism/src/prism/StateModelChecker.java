@@ -26,6 +26,11 @@
 
 package prism;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.List;
+
+import mtbdd.PrismMTBDD;
 import dv.DoubleVector;
 import jdd.*;
 import odd.*;
@@ -117,7 +122,11 @@ public class StateModelChecker implements ModelChecker
 
 	/**
 	 * Additional constructor for creating stripped down StateModelChecker for
-	 * expression to MTBDD conversions.
+	 * expression to MTBDD conversions (no colum variables, no transition function, ...).
+	 * <br>
+	 * The dummy model constructed for these purposes has to be cleared by calling
+	 * {@code clearDummyModel()} later.
+	 * <br>[ REFS: <i>none</i>, DEREFS: <i>none</i> ]
 	 */
 	public StateModelChecker(Prism prism, VarList varList, JDDVars allDDRowVars, JDDVars[] varDDRowVars, Values constantValues) throws PrismException
 	{
@@ -130,17 +139,32 @@ public class StateModelChecker implements ModelChecker
 		this.constantValues = constantValues;
 		// Create dummy model
 		reach = null;
-		allDDRowVars.refAll();
-		model = new ProbModel(JDD.Constant(0), JDD.Constant(0), new JDDNode[] {}, new JDDNode[] {}, null, allDDRowVars, new JDDVars(), null, 0, null, null,
-				null, 0, varList, varDDRowVars, null, constantValues);
+		model = new ProbModel(JDD.Constant(0),  // trans
+		                      JDD.Constant(0),  // start
+		                      new JDDNode[] {}, // state-rew
+		                      new JDDNode[] {}, // trans-rew
+		                      null,             // rewardStructNames
+		                      allDDRowVars.copy(), // allDDRowVars
+		                      new JDDVars(),    // allDDColVars
+		                      null,             // ddVarNames
+		                      0,                // numModules
+		                      null,             // moduleNames
+		                      null,             // moduleRowVars
+		                      null,             // moduleColVars
+		                      varDDRowVars.length, // numVars
+		                      varList,          // varList
+		                      JDDVars.copyArray(varDDRowVars), // varDDRowVars
+		                      null,             // varDDColVars
+		                      constantValues    // constantValues
+		                     );
 	}
 
 	/**
 	 * Create a model checker (a subclass of this one) for a given model type
 	 */
-	public static ModelChecker createModelChecker(ModelType modelType, Prism prism, Model model, PropertiesFile propertiesFile) throws PrismException
+	public static StateModelChecker createModelChecker(ModelType modelType, Prism prism, Model model, PropertiesFile propertiesFile) throws PrismException
 	{
-		ModelChecker mc = null;
+		StateModelChecker mc = null;
 		switch (modelType) {
 		case DTMC:
 			mc = new ProbModelChecker(prism, model, propertiesFile);
@@ -1034,8 +1058,13 @@ public class StateModelChecker implements ModelChecker
 			currentFilter = null;
 		}
 
-		// Check operand recursively
-		vals = checkExpression(expr.getOperand());
+		try {
+			// Check operand recursively
+			vals = checkExpression(expr.getOperand());
+		} catch (PrismException e) {
+			JDD.Deref(ddFilter);
+			throw e;
+		}
 
 		// Print out number of states satisfying filter
 		if (!filterInit)
@@ -1398,6 +1427,32 @@ public class StateModelChecker implements ModelChecker
 	public Values getConstantValues()
 	{
 		return constantValues;
+	}
+	
+	/**
+	 * Export a set of labels and the states that satisfy them.
+	 * @param labelNames The name of each label
+	 * @param exportType The format in which to export
+	 * @param file Where to export
+	 */
+	public void exportLabels(List<String> labelNames, int exportType, File file) throws PrismException, FileNotFoundException
+	{
+		// Convert labels to BDDs
+		int numLabels = labelNames.size();
+		JDDNode labels[] = new JDDNode[numLabels];
+		for (int i = 0; i < numLabels; i++) {
+			labels[i] = checkExpressionDD(new ExpressionLabel(labelNames.get(i)));
+		}
+
+		// Export them using the MTBDD engine
+		String matlabVarName = "l";
+		String labelNamesArr[] = labelNames.toArray(new String[labelNames.size()]);
+		PrismMTBDD.ExportLabels(labels, labelNamesArr, matlabVarName, allDDRowVars, odd, exportType, (file != null) ? file.getPath() : null);
+		
+		// Derefs
+		for (int i = 0; i < numLabels; i++) {
+			JDD.Deref(labels[i]);
+		}
 	}
 }
 

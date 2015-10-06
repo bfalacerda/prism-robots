@@ -30,113 +30,70 @@ import parser.EvaluateContext;
 import parser.Values;
 import parser.visitor.ASTVisitor;
 import prism.OpRelOpBound;
-import prism.PrismException;
 import prism.PrismLangException;
 
-public class ExpressionProb extends Expression implements ExpressionQuant
+public class ExpressionProb extends ExpressionQuant
 {
-	RelOp relOp = null;
-	Expression prob = null;
-	Expression expression = null;
-	// Note: this "old-style" filter is just for display purposes
-	// The parser creates an (invisible) new-style filter around this expression
-	Filter filter = null;
-
 	// Constructors
 
 	public ExpressionProb()
 	{
 	}
 
-	public ExpressionProb(Expression e, String r, Expression p)
+	public ExpressionProb(Expression expression, String relOpString, Expression p)
 	{
-		expression = e;
-		relOp = RelOp.parseSymbol(r);
-		prob = p;
+		setExpression(expression);
+		setRelOp(relOpString);
+		setBound(p);
 	}
 
 	// Set methods
 
-	public void setRelOp(RelOp relOp)
-	{
-		this.relOp = relOp;
-	}
-
-	public void setRelOp(String r)
-	{
-		relOp = RelOp.parseSymbol(r);
-	}
-
+	/**
+	 * Set the probability bound. Equivalent to {@code setBound(p)}.
+	 */
 	public void setProb(Expression p)
 	{
-		prob = p;
-	}
-
-	public void setExpression(Expression e)
-	{
-		expression = e;
-	}
-
-	public void setFilter(Filter f)
-	{
-		filter = f;
+		setBound(p);
 	}
 
 	// Get methods
 
-	public RelOp getRelOp()
-	{
-		return relOp;
-	}
-
+	/**
+	 * Get the probability bound. Equivalent to {@code getBound()}.
+	 */
 	public Expression getProb()
 	{
-		return prob;
-	}
-
-	public Expression getExpression()
-	{
-		return expression;
-	}
-
-	public Filter getFilter()
-	{
-		return filter;
+		return getBound();
 	}
 
 	/**
-	 * Get a string describing the type of P operator, e.g. "P=?" or "P<p".
+	 * Get a string describing the type of P operator, e.g. "P=?" or "P&lt;p".
 	 */
 	public String getTypeOfPOperator()
 	{
 		String s = "";
-		s += "P" + relOp;
-		s += (prob == null) ? "?" : "p";
+		s += "P" + getRelOp();
+		s += (getBound() == null) ? "?" : "p";
 		return s;
 	}
 
-	/**
-	 * Get info about the operator and bound.
-	 * Does some checks, e.g., throws an exception if probability is out of range.
-	 * @param constantValues Values for constants in order to evaluate any bound
-	 */
-	public OpRelOpBound getRelopBoundInfo(Values constantValues) throws PrismException
+	@Override
+	public OpRelOpBound getRelopBoundInfo(Values constantValues) throws PrismLangException
 	{
-		if (prob != null) {
-			double bound = prob.evaluateDouble(constantValues);
-			if (bound < 0 || bound > 1)
-				throw new PrismException("Invalid probability bound " + bound + " in P operator");
-			return new OpRelOpBound("P", relOp, bound);
+		if (getBound() != null) {
+			double boundVal = getBound().evaluateDouble(constantValues);
+			if (boundVal < 0 || boundVal > 1)
+				throw new PrismLangException("Invalid probability bound " + boundVal + " in P operator");
+			return new OpRelOpBound("P", getRelOp(), boundVal);
 		} else {
-			return new OpRelOpBound("P", relOp, null);
+			return new OpRelOpBound("P", getRelOp(), null);
 		}
 	}
 	
 	// Methods required for Expression:
 
-	/**
-	 * Is this expression constant?
-	 */
+	@Override
 	public boolean isConstant()
 	{
 		return false;
@@ -148,25 +105,20 @@ public class ExpressionProb extends Expression implements ExpressionQuant
 		return false;
 	}
 	
-	/**
-	 * Evaluate this expression, return result.
-	 * Note: assumes that type checking has been done already.
-	 */
+	@Override
 	public Object evaluate(EvaluateContext ec) throws PrismLangException
 	{
 		throw new PrismLangException("Cannot evaluate a P operator without a model");
 	}
 
-	/**
-	  * Get "name" of the result of this expression (used for y-axis of any graphs plotted)
-	  */
+	@Override
 	public String getResultName()
 	{
-		if (prob != null)
+		if (getBound() != null)
 			return "Result";
-		else if (relOp == RelOp.MIN)
+		else if (getRelOp() == RelOp.MIN)
 			return "Minimum probability";
-		else if (relOp == RelOp.MAX)
+		else if (getRelOp() == RelOp.MAX)
 			return "Maximum probability";
 		else
 			return "Probability";
@@ -180,44 +132,40 @@ public class ExpressionProb extends Expression implements ExpressionQuant
 
 	// Methods required for ASTElement:
 
-	/**
-	 * Visitor method.
-	 */
+	@Override
 	public Object accept(ASTVisitor v) throws PrismLangException
 	{
 		return v.visit(this);
 	}
 
-	/**
-	 * Convert to string.
-	 */
+	@Override
+	public Expression deepCopy()
+	{
+		ExpressionProb expr = new ExpressionProb();
+		expr.setExpression(getExpression() == null ? null : getExpression().deepCopy());
+		expr.setRelOp(getRelOp());
+		expr.setBound(getBound() == null ? null : getBound().deepCopy());
+		expr.setFilter(getFilter() == null ? null : (Filter)getFilter().deepCopy());
+		expr.setType(type);
+		expr.setPosition(this);
+		return expr;
+	}
+
+	// Standard methods
+
+	@Override
 	public String toString()
 	{
 		String s = "";
 
-		s += "P" + relOp;
-		s += (prob == null) ? "?" : prob.toString();
-		s += " [ " + expression;
-		if (filter != null)
-			s += " " + filter;
+		s += "P" + getModifierString() + getRelOp();
+		s += (getBound() == null) ? "?" : getBound().toString();
+		s += " [ " + getExpression();
+		if (getFilter() != null)
+			s += " " + getFilter();
 		s += " ]";
 
 		return s;
-	}
-
-	/**
-	 * Perform a deep copy.
-	 */
-	public Expression deepCopy()
-	{
-		ExpressionProb expr = new ExpressionProb();
-		expr.setExpression(expression == null ? null : expression.deepCopy());
-		expr.setRelOp(relOp);
-		expr.setProb(prob == null ? null : prob.deepCopy());
-		expr.setFilter(filter == null ? null : (Filter)filter.deepCopy());
-		expr.setType(type);
-		expr.setPosition(this);
-		return expr;
 	}
 }
 

@@ -66,9 +66,16 @@ public abstract class ModelExplicit implements Model
 	protected List<State> statesList;
 	/** (Optionally) a list of values for constants associated with this model. */
 	protected Values constantValues;
+	/** (Optionally) the list of variables */
+	protected VarList varList;
 	/** (Optionally) some labels (atomic propositions) associated with the model,
 	 * represented as a String->BitSet mapping from their names to the states that satisfy them. */
 	protected Map<String, BitSet> labels = new TreeMap<String, BitSet>();
+	
+	/**
+	 * (Optionally) the stored predecessor relation. Becomes inaccurate after the model is changed!
+	 */
+	protected PredecessorRelation predecessorRelation = null;
 
 	// Mutators
 
@@ -89,6 +96,7 @@ public abstract class ModelExplicit implements Model
 		statesList = model.statesList;
 		constantValues = model.constantValues;
 		labels = model.labels;
+		varList = model.varList;
 	}
 
 	/**
@@ -112,6 +120,7 @@ public abstract class ModelExplicit implements Model
 		statesList = null;
 		constantValues = model.constantValues;
 		labels.clear();
+		varList = model.varList;
 	}
 
 	/**
@@ -124,6 +133,7 @@ public abstract class ModelExplicit implements Model
 		deadlocks = new TreeSet<Integer>();
 		statesList = null;
 		constantValues = null;
+		varList = null;
 		labels = new TreeMap<String, BitSet>();
 	}
 
@@ -133,6 +143,14 @@ public abstract class ModelExplicit implements Model
 	public void addInitialState(int i)
 	{
 		initialStates.add(i);
+	}
+
+	/**
+	 * Empty the list of initial states.
+	 */
+	public void clearInitialStates()
+	{
+		initialStates.clear();
 	}
 
 	/**
@@ -165,10 +183,18 @@ public abstract class ModelExplicit implements Model
 	}
 
 	/**
+	 * Sets the VarList for this model (may be {@code null}).
+	 */
+	public void setVarList(VarList varList)
+	{
+		this.varList = varList;
+	}
+
+	/**
 	 * Adds a label and the set the states that satisfy it.
 	 * Any existing label with the same name is overwritten.
 	 * @param name The name of the label
-	 * @param states The states that satisyy the label 
+	 * @param states The states that satisfy the label 
 	 */
 	public void addLabel(String name, BitSet states)
 	{
@@ -255,6 +281,12 @@ public abstract class ModelExplicit implements Model
 	public Values getConstantValues()
 	{
 		return constantValues;
+	}
+	
+	@Override
+	public VarList getVarList()
+	{
+		return varList;
 	}
 
 	@Override
@@ -402,11 +434,23 @@ public abstract class ModelExplicit implements Model
 	}
 
 	@Override
-	public abstract String infoString();
+	public String infoString()
+	{
+		String s = "";
+		s += numStates + " states (" + getNumInitialStates() + " initial)";
+		s += ", " + getNumTransitions() + " transitions";
+		return s;
+	}
 
 	@Override
-	public abstract String infoStringTable();
-
+	public String infoStringTable()
+	{
+		String s = "";
+		s += "States:      " + numStates + " (" + getNumInitialStates() + " initial)\n";
+		s += "Transitions: " + getNumTransitions() + "\n";
+		return s;
+	}
+	
 	@Override
 	public boolean equals(Object o)
 	{
@@ -419,4 +463,29 @@ public abstract class ModelExplicit implements Model
 			return false;
 		return true;
 	}
+
+	@Override
+	public boolean hasStoredPredecessorRelation() {
+		return (predecessorRelation != null);
+	}
+
+	@Override
+	public PredecessorRelation getPredecessorRelation(prism.PrismComponent parent, boolean storeIfNew) {
+		if (predecessorRelation != null) {
+			return predecessorRelation;
+		}
+
+		PredecessorRelation pre = PredecessorRelation.forModel(parent, this);
+
+		if (storeIfNew) {
+			predecessorRelation = pre;
+		}
+		return pre;
+	}
+
+	@Override
+	public void clearPredecessorRelation() {
+		predecessorRelation = null;
+	}
+
 }

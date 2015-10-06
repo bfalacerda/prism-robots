@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import common.IterableStateSet;
 import parser.State;
 import parser.Values;
 import parser.VarList;
@@ -61,6 +62,11 @@ public class SubNondetModel implements NondetModel
 	private Map<Integer, Integer> stateLookupTable = new HashMap<Integer, Integer>();
 	private Map<Integer, Map<Integer, Integer>> actionLookupTable = new HashMap<Integer, Map<Integer, Integer>>();
 	private Map<Integer, Integer> inverseStateLookupTable = new HashMap<Integer, Integer>();
+
+	/**
+	 * (Optionally) the stored predecessor relation. Becomes inaccurate after the model is changed!
+	 */
+	protected PredecessorRelation predecessorRelation;
 
 	private int numTransitions = 0;
 	private int maxNumChoices = 0;
@@ -161,12 +167,18 @@ public class SubNondetModel implements NondetModel
 	private List<State> generateSubStateList(BitSet states)
 	{
 		List<State> statesList = new ArrayList<State>();
-		for (int i = 0; i < model.getNumStates(); i++) {
-			if (states.get(i)) {
-				statesList.add(model.getStatesList().get(i));
-			}
+		for (int i : new IterableStateSet(states, model.getNumStates())){
+			statesList.add(model.getStatesList().get(i));
 		}
 		return statesList;
+	}
+
+	@Override
+	public VarList getVarList()
+	{
+		// we can return the varList of the model, as we do not change
+		// the variables in the model
+		return model.getVarList();
 	}
 
 	@Override
@@ -197,13 +209,11 @@ public class SubNondetModel implements NondetModel
 	{
 		s = translateState(s);
 		HashSet<Integer> succs = new HashSet<Integer>();
-		for (int i = 0; i < model.getNumChoices(s); i++) {
-			if (actions.get(s).get(i)) {
-				Iterator<Integer> it = model.getSuccessorsIterator(s, i);
-				while (it.hasNext()) {
-					int j = it.next();
-					succs.add(inverseTranslateState(j));
-				}
+		for (int i : new IterableStateSet(actions.get(s), model.getNumChoices(s))){
+			Iterator<Integer> it = model.getSuccessorsIterator(s, i);
+			while (it.hasNext()) {
+				int j = it.next();
+				succs.add(inverseTranslateState(j));
 			}
 		}
 		return succs.iterator();
@@ -220,13 +230,27 @@ public class SubNondetModel implements NondetModel
 	@Override
 	public boolean allSuccessorsInSet(int s, BitSet set)
 	{
-		throw new UnsupportedOperationException();
+		Iterator<Integer> successors = getSuccessorsIterator(s);
+		while (successors.hasNext()) {
+			Integer successor = successors.next();
+			if (!set.get(successor)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	@Override
 	public boolean someSuccessorsInSet(int s, BitSet set)
 	{
-		throw new UnsupportedOperationException();
+		Iterator<Integer> successors = getSuccessorsIterator(s);
+		while (successors.hasNext()) {
+			Integer successor = successors.next();
+			if (set.get(successor)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
@@ -376,28 +400,26 @@ public class SubNondetModel implements NondetModel
 	@Override
 	public boolean allSuccessorsInSet(int s, int i, BitSet set)
 	{
-		Iterator<Integer> successors = getSuccessorsIterator(s,i);
+		Iterator<Integer> successors = getSuccessorsIterator(s, i);
 		while (successors.hasNext()) {
 			Integer successor = successors.next();
 			if (!set.get(successor)) {
 				return false;
 			}
 		}
-
 		return true;
 	}
 
 	@Override
 	public boolean someSuccessorsInSet(int s, int i, BitSet set)
 	{
-		Iterator<Integer> successors = getSuccessorsIterator(s,i);
+		Iterator<Integer> successors = getSuccessorsIterator(s, i);
 		while (successors.hasNext()) {
 			Integer successor = successors.next();
 			if (set.get(successor)) {
 				return true;
 			}
 		}
-
 		return false;
 	}
 
@@ -426,22 +448,18 @@ public class SubNondetModel implements NondetModel
 
 	private void generateStatistics()
 	{
-		for (int i = 0; i < model.getNumStates(); i++) {
-			if (states.get(i)) {
-				numTransitions += getTransitions(i);
-				numChoices += actions.get(i).cardinality();
-				maxNumChoices = Math.max(maxNumChoices, model.getNumChoices(i));
-			}
+		for (int i : new IterableStateSet(states, model.getNumStates())){
+			numTransitions += getTransitions(i);
+			numChoices += actions.get(i).cardinality();
+			maxNumChoices = Math.max(maxNumChoices, model.getNumChoices(i));
 		}
 	}
 
 	private int getTransitions(int state)
 	{
 		int transitions = 0;
-		for (int i = 0; i < model.getNumChoices(state); i++) {
-			if (actions.get(state).get(i)) {
-				transitions += model.getNumTransitions(state, i);
-			}
+		for (int i : new IterableStateSet(actions.get(state), model.getNumChoices(state))){
+			transitions += model.getNumTransitions(state, i);
 		}
 		return transitions;
 	}
@@ -454,18 +472,14 @@ public class SubNondetModel implements NondetModel
 
 	private void generateLookupTable(BitSet states, Map<Integer, BitSet> actions)
 	{
-		for (int i = 0; i < model.getNumStates(); i++) {
-			if (states.get(i)) {
-				inverseStateLookupTable.put(i, stateLookupTable.size());
-				stateLookupTable.put(stateLookupTable.size(), i);
-				Map<Integer, Integer> r = new HashMap<Integer, Integer>();
-				for (int j = 0; j < model.getNumChoices(i); j++) {
-					if (actions.get(i).get(j)) {
-						r.put(r.size(), j);
-					}
-				}
-				actionLookupTable.put(actionLookupTable.size(), r);
+		for (int i : new IterableStateSet(states, model.getNumStates())){
+			inverseStateLookupTable.put(i, stateLookupTable.size());
+			stateLookupTable.put(stateLookupTable.size(), i);
+			Map<Integer, Integer> r = new HashMap<Integer, Integer>();
+			for (int j : new IterableStateSet(actions.get(i), model.getNumChoices(i))){
+				r.put(r.size(), j);
 			}
+			actionLookupTable.put(actionLookupTable.size(), r);
 		}
 	}
 
@@ -482,5 +496,29 @@ public class SubNondetModel implements NondetModel
 	public int translateAction(int s, int i)
 	{
 		return actionLookupTable.get(s).get(i);
+	}
+
+	@Override
+	public boolean hasStoredPredecessorRelation() {
+		return (predecessorRelation != null);
+	}
+
+	@Override
+	public PredecessorRelation getPredecessorRelation(prism.PrismComponent parent, boolean storeIfNew) {
+		if (predecessorRelation != null) {
+			return predecessorRelation;
+		}
+
+		PredecessorRelation pre = PredecessorRelation.forModel(parent, this);
+
+		if (storeIfNew) {
+			predecessorRelation = pre;
+		}
+		return pre;
+	}
+
+	@Override
+	public void clearPredecessorRelation() {
+		predecessorRelation = null;
 	}
 }

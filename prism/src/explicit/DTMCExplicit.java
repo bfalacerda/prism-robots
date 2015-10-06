@@ -28,15 +28,17 @@ package explicit;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.BitSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.Map.Entry;
 
 import common.IterableStateSet;
-
 import explicit.rewards.MCRewards;
 import prism.ModelType;
+import prism.Pair;
 import prism.PrismException;
 import prism.PrismLog;
 import prism.PrismUtils;
@@ -55,42 +57,28 @@ public abstract class DTMCExplicit extends ModelExplicit implements DTMC
 	}
 
 	@Override
-	public String infoString()
-	{
-		String s = "";
-		s += numStates + " states (" + getNumInitialStates() + " initial)";
-		s += ", " + getNumTransitions() + " transitions";
-		return s;
-	}
-
-	@Override
-	public String infoStringTable()
-	{
-		String s = "";
-		s += "States:      " + numStates + " (" + getNumInitialStates() + " initial)\n";
-		s += "Transitions: " + getNumTransitions() + "\n";
-		return s;
-	}
-	
-	@Override
 	public void exportToPrismExplicitTra(PrismLog out)
 	{
 		int i;
-		TreeMap<Integer, Double> sorted;
+		TreeMap<Integer, Pair<Double, Object>> sorted;
 		// Output transitions to .tra file
 		out.print(numStates + " " + getNumTransitions() + "\n");
-		sorted = new TreeMap<Integer, Double>();
+		sorted = new TreeMap<Integer, Pair<Double, Object>>();
 		for (i = 0; i < numStates; i++) {
 			// Extract transitions and sort by destination state index (to match PRISM-exported files)
-			Iterator<Map.Entry<Integer, Double>> iter = getTransitionsIterator(i);
+			Iterator<Map.Entry<Integer,Pair<Double, Object>>> iter = getTransitionsAndActionsIterator(i);
 			while (iter.hasNext()) {
-				Map.Entry<Integer, Double> e = iter.next();
+				Map.Entry<Integer, Pair<Double, Object>> e = iter.next();
 				sorted.put(e.getKey(), e.getValue());
 			}
 			// Print out (sorted) transitions
-			for (Map.Entry<Integer, Double> e : sorted.entrySet()) {
+			for (Map.Entry<Integer, Pair<Double, Object>> e : sorted.entrySet()) {
 				// Note use of PrismUtils.formatDouble to match PRISM-exported files
-				out.print(i + " " + e.getKey() + " " + PrismUtils.formatDouble(e.getValue()) + "\n");
+				out.print(i + " " + e.getKey() + " " + PrismUtils.formatDouble(e.getValue().first));
+				Object action = e.getValue().second; 
+				if (action != null && !"".equals(action))
+					out.print(" " + action);
+				out.print("\n");
 			}
 			sorted.clear();
 		}
@@ -151,6 +139,13 @@ public abstract class DTMCExplicit extends ModelExplicit implements DTMC
 	// Accessors (for DTMC)
 	
 	@Override
+	public Iterator<Entry<Integer, Pair<Double, Object>>> getTransitionsAndActionsIterator(int s)
+	{
+		// Default implementation: extend iterator, setting all actions to null
+		return new AddDefaultActionToTransitionsIterator(getTransitionsIterator(s), null);
+	}
+
+	@Override
 	public void mvMult(double vect[], double result[], BitSet subset, boolean complement)
 	{
 		for (int s : new IterableStateSet(subset, numStates, complement)) {
@@ -185,6 +180,40 @@ public abstract class DTMCExplicit extends ModelExplicit implements DTMC
 	{
 		for (int s : new IterableStateSet(subset, numStates, complement)) {
 			result[s] = mvMultRewSingle(s, vect, mcRewards);
+		}
+	}
+
+	public class AddDefaultActionToTransitionsIterator implements Iterator<Map.Entry<Integer, Pair<Double, Object>>>
+	{
+		private Iterator<Entry<Integer, Double>> transIter;
+		private Object defaultAction;
+		private Entry<Integer, Double> next;
+
+		public AddDefaultActionToTransitionsIterator(Iterator<Entry<Integer, Double>> transIter, Object defaultAction)
+		{
+			this.transIter = transIter;
+			this.defaultAction = defaultAction;
+		}
+
+		@Override
+		public Entry<Integer, Pair<Double, Object>> next()
+		{
+			next = transIter.next();
+			final Integer state = next.getKey();
+			final Double probability = next.getValue();
+			return new AbstractMap.SimpleImmutableEntry<>(state, new Pair<>(probability, defaultAction));
+		}
+
+		@Override
+		public boolean hasNext()
+		{
+			return transIter.hasNext();
+		}
+
+		@Override
+		public void remove()
+		{
+			// Do nothing: read-only
 		}
 	}
 }

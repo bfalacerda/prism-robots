@@ -33,16 +33,10 @@ import prism.OpRelOpBound;
 import prism.PrismException;
 import prism.PrismLangException;
 
-public class ExpressionReward extends Expression implements ExpressionQuant
+public class ExpressionReward extends ExpressionQuant
 {
-	Object rewardStructIndex = null;
-	Object rewardStructIndexDiv = null;
-	RelOp relOp = null;
-	Expression reward = null;
-	Expression expression = null;
-	// Note: this "old-style" filter is just for display purposes
-	// The parser creates an (invisible) new-style filter around this expression
-	Filter filter = null;
+	protected Object rewardStructIndex = null;
+	protected Object rewardStructIndexDiv = null;
 	
 	// Constructors
 	
@@ -50,11 +44,11 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 	{
 	}
 	
-	public ExpressionReward(Expression e, String r, Expression p)
+	public ExpressionReward(Expression expression, String relOpString, Expression r)
 	{
-		expression = e;
-		relOp = RelOp.parseSymbol(r);
-		reward = p;
+		setExpression(expression);
+		setRelOp(relOpString);
+		setBound(r);
 	}
 
 	// Set methods
@@ -69,29 +63,12 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 		rewardStructIndexDiv = o;
 	}
 
-	public void setRelOp(RelOp relOp)
+	/**
+	 * Set the reward bound. Equivalent to {@code setBound(r)}.
+	 */
+	public void setReward(Expression r)
 	{
-		this.relOp = relOp;
-	}
-
-	public void setRelOp(String r)
-	{
-		relOp = RelOp.parseSymbol(r);
-	}
-
-	public void setReward(Expression p)
-	{
-		reward = p;
-	}
-
-	public void setExpression(Expression e)
-	{
-		expression = e;
-	}
-	
-	public void setFilter(Filter f)
-	{
-		filter = f;
+		setBound(r);
 	}
 
 	// Get methods
@@ -106,36 +83,24 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 		return rewardStructIndexDiv;
 	}
 
-	public RelOp getRelOp()
-	{
-		return relOp;
-	}
-	
+	/**
+	 * Get the reward bound. Equivalent to {@code getBound()}.
+	 */
 	public Expression getReward()
 	{
-		return reward;
-	}
-
-	public Expression getExpression()
-	{
-		return expression;
-	}
-	
-	public Filter getFilter()
-	{
-		return filter;
+		return getBound();
 	}
 
 	// Other methods
 	
 	/**
-	 * Get a string describing the type of R operator, e.g. "R=?" or "R<r".
+	 * Get a string describing the type of R operator, e.g. "R=?" or "R&lt;r".
 	 */
 	public String getTypeOfROperator()
 	{
 		String s = "";
-		s += "R" + relOp;
-		s += (reward == null) ? "?" : "r";
+		s += "R" + getRelOp();
+		s += (getBound() == null) ? "?" : "r";
 		return s;
 	}
 
@@ -191,19 +156,17 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 	 */
 	public OpRelOpBound getRelopBoundInfo(Values constantValues) throws PrismException
 	{
-		if (reward != null) {
-			double bound = reward.evaluateDouble(constantValues);
-			return new OpRelOpBound("R", relOp, bound);
+		if (getBound() != null) {
+			double boundValue = getBound().evaluateDouble(constantValues);
+			return new OpRelOpBound("R", getRelOp(), boundValue);
 		} else {
-			return new OpRelOpBound("R", relOp, null);
+			return new OpRelOpBound("R", getRelOp(), null);
 		}
 	}
 	
 	// Methods required for Expression:
 	
-	/**
-	 * Is this expression constant?
-	 */
+	@Override
 	public boolean isConstant()
 	{
 		return false;
@@ -215,25 +178,20 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 		return false;
 	}
 	
-	/**
-	 * Evaluate this expression, return result.
-	 * Note: assumes that type checking has been done already.
-	 */
+	@Override
 	public Object evaluate(EvaluateContext ec) throws PrismLangException
 	{
 		throw new PrismLangException("Cannot evaluate an R operator without a model");
 	}
 
-	/**
-	  * Get "name" of the result of this expression (used for y-axis of any graphs plotted)
-	  */
+	@Override
 	public String getResultName()
 	{
 		// For R=? properties, use name of reward structure where applicable
-		if (reward == null) {
+		if (getBound() == null) {
 			String s = "E";
-			if (relOp == RelOp.MIN) s = "Minimum e";
-			else if (relOp == RelOp.MAX) s = "Maximum e";
+			if (getRelOp() == RelOp.MIN) s = "Minimum e";
+			else if (getRelOp() == RelOp.MAX) s = "Maximum e";
 			else s = "E";
 			if (rewardStructIndex instanceof String) {
 				if (rewardStructIndexDiv instanceof String)
@@ -261,22 +219,37 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 
 	// Methods required for ASTElement:
 	
-	/**
-	 * Visitor method.
-	 */
+	@Override
 	public Object accept(ASTVisitor v) throws PrismLangException
 	{
 		return v.visit(this);
 	}
+
+	@Override
+	public Expression deepCopy()
+	{
+		ExpressionReward expr = new ExpressionReward();
+		expr.setExpression(getExpression() == null ? null : getExpression().deepCopy());
+		expr.setRelOp(getRelOp());
+		expr.setBound(getBound() == null ? null : getBound().deepCopy());
+		if (rewardStructIndex != null && rewardStructIndex instanceof Expression) expr.setRewardStructIndex(((Expression)rewardStructIndex).deepCopy());
+		else expr.setRewardStructIndex(rewardStructIndex);
+		if (rewardStructIndexDiv != null && rewardStructIndexDiv instanceof Expression) expr.setRewardStructIndexDiv(((Expression)rewardStructIndexDiv).deepCopy());
+		else expr.setRewardStructIndexDiv(rewardStructIndexDiv);
+		expr.setFilter(getFilter() == null ? null : (Filter)getFilter().deepCopy());
+		expr.setType(type);
+		expr.setPosition(this);
+		return expr;
+	}
+
+	// Standard methods
 	
-	/**
-	 * Convert to string.
-	 */
+	@Override
 	public String toString()
 	{
 		String s = "";
 		
-		s += "R";
+		s += "R" + getModifierString();
 		if (rewardStructIndex != null) {
 			if (rewardStructIndex instanceof Expression) s += "{"+rewardStructIndex+"}";
 			else if (rewardStructIndex instanceof String) s += "{\""+rewardStructIndex+"\"}";
@@ -286,32 +259,46 @@ public class ExpressionReward extends Expression implements ExpressionQuant
 				else if (rewardStructIndexDiv instanceof String) s += "{\""+rewardStructIndexDiv+"\"}";
 			}
 		}
-		s += relOp;
-		s += (reward==null) ? "?" : reward.toString();
-		s += " [ " + expression;
-		if (filter != null) s += " "+filter;
+		s += getRelOp();
+		s += (getBound()==null) ? "?" : getBound().toString();
+		s += " [ " + getExpression();
+		if (getFilter() != null) s += " "+getFilter();
 		s += " ]";
 		
 		return s;
 	}
 
-	/**
-	 * Perform a deep copy.
-	 */
-	public Expression deepCopy()
+	@Override
+	public int hashCode()
 	{
-		ExpressionReward expr = new ExpressionReward();
-		expr.setExpression(expression == null ? null : expression.deepCopy());
-		expr.setRelOp(relOp);
-		expr.setReward(reward == null ? null : reward.deepCopy());
-		if (rewardStructIndex != null && rewardStructIndex instanceof Expression) expr.setRewardStructIndex(((Expression)rewardStructIndex).deepCopy());
-		else expr.setRewardStructIndex(rewardStructIndex);
-		if (rewardStructIndexDiv != null && rewardStructIndexDiv instanceof Expression) expr.setRewardStructIndexDiv(((Expression)rewardStructIndexDiv).deepCopy());
-		else expr.setRewardStructIndexDiv(rewardStructIndexDiv);
-		expr.setFilter(filter == null ? null : (Filter)filter.deepCopy());
-		expr.setType(type);
-		expr.setPosition(this);
-		return expr;
+		final int prime = 31;
+		int result = super.hashCode();
+		result = prime * result + ((rewardStructIndex == null) ? 0 : rewardStructIndex.hashCode());
+		result = prime * result + ((rewardStructIndexDiv == null) ? 0 : rewardStructIndexDiv.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj)
+	{
+		if (this == obj)
+			return true;
+		if (!super.equals(obj))
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		ExpressionReward other = (ExpressionReward) obj;
+		if (rewardStructIndex == null) {
+			if (other.rewardStructIndex != null)
+				return false;
+		} else if (!rewardStructIndex.equals(other.rewardStructIndex))
+			return false;
+		if (rewardStructIndexDiv == null) {
+			if (other.rewardStructIndexDiv != null)
+				return false;
+		} else if (!rewardStructIndexDiv.equals(other.rewardStructIndexDiv))
+			return false;
+		return true;
 	}
 }
 

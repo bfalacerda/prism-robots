@@ -30,9 +30,12 @@ package userinterface.simulator;
 
 import java.awt.*;
 import java.awt.event.*;
+
 import javax.swing.*;
 import javax.swing.table.*;
 import javax.swing.event.*;
+import javax.swing.filechooser.FileFilter;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 import simulator.*;
 import simulator.networking.*;
@@ -55,13 +58,15 @@ public class GUISimulator extends GUIPlugin implements MouseListener, ListSelect
 	private GUIMultiProperties guiProp; //reference to the properties information
 	private GUIMultiModel guiMultiModel; //reference to the model plugin
 	private SimulatorEngine engine;
-	private GUIPrismFileFilter[] txtFilter;
+	private FileFilter textFilter;
 	private JMenu simulatorMenu;
 	private JPopupMenu pathPopupMenu;
 
 	//Current State
 	private boolean pathActive;
 	private ModulesFile parsedModel;
+	private boolean newPathAfterReceiveParseNotification, newPathPlotAfterReceiveParseNotification;
+	private boolean chooseInitialState;
 
 	private GUISimulatorPathTableModel pathTableModel;
 	private UpdateTableModel updateTableModel;
@@ -176,9 +181,7 @@ public class GUISimulator extends GUIPlugin implements MouseListener, ListSelect
 		totalTimeLabel.setText(formatDouble(0.0));
 		pathLengthLabel.setText("0");
 
-		txtFilter = new GUIPrismFileFilter[1];
-		txtFilter[0] = new GUIPrismFileFilter("Text files (*.txt)");
-		txtFilter[0].addExtension("txt");
+		textFilter =  new FileNameExtensionFilter("Plain text files (*.txt)", "txt");
 
 		displayStyleFast = true;
 		displayPathLoops = true;
@@ -317,6 +320,15 @@ public class GUISimulator extends GUIPlugin implements MouseListener, ListSelect
 
 	public void a_newPath(boolean chooseInitialState)
 	{
+		// Request a parse
+		newPathAfterReceiveParseNotification = true;
+		this.chooseInitialState = chooseInitialState;
+		notifyEventListeners(new GUIPropertiesEvent(GUIPropertiesEvent.REQUEST_MODEL_PARSE));
+	}
+	
+	public void newPathAfterParse() 
+	{
+		newPathAfterReceiveParseNotification = false;
 		Values initialState;
 		try {
 			// Check model is simulate-able
@@ -670,7 +682,7 @@ public class GUISimulator extends GUIPlugin implements MouseListener, ListSelect
 	public void a_exportPath()
 	{
 		try {
-			if (showSaveFileDialog(txtFilter, txtFilter[0]) != JFileChooser.APPROVE_OPTION)
+			if (showSaveFileDialog(textFilter) != JFileChooser.APPROVE_OPTION)
 				return;
 			setComputing(true);
 			engine.exportPath(getChooserFile());
@@ -696,6 +708,15 @@ public class GUISimulator extends GUIPlugin implements MouseListener, ListSelect
 
 	public void a_newPathPlot(boolean chooseInitialState)
 	{
+		// Request a parse
+		newPathPlotAfterReceiveParseNotification = true;
+		this.chooseInitialState = chooseInitialState;
+		notifyEventListeners(new GUIPropertiesEvent(GUIPropertiesEvent.REQUEST_MODEL_PARSE));
+	}
+	
+	public void newPathPlotAfterParse() 
+	{
+		newPathPlotAfterReceiveParseNotification = false;
 		Values initialState;
 		try {
 			// Check model is simulate-able
@@ -853,33 +874,25 @@ public class GUISimulator extends GUIPlugin implements MouseListener, ListSelect
 	{
 	}
 
-	private boolean ignoreNextParse;
-
-	public void ignoreNextParse()
-	{
-		ignoreNextParse = true;
-	}
-
 	public boolean processGUIEvent(userinterface.util.GUIEvent e)
 	{
 		if (e instanceof GUIModelEvent) {
 			GUIModelEvent me = (GUIModelEvent) e;
 			if (me.getID() == me.NEW_MODEL) {
 				//New Model
-
 				a_clearModel();
-
 				doEnables();
 				//newList();
-			} else if (!ignoreNextParse && me.getID() == GUIModelEvent.MODEL_PARSED) {
-
+			} else if (me.getID() == GUIModelEvent.MODEL_PARSED) {
 				a_loadModulesFile(me.getModulesFile());
-
 				doEnables();
-
-			} else if (ignoreNextParse) {
-				ignoreNextParse = false;
-			}
+				if (newPathAfterReceiveParseNotification)
+					newPathAfterParse();
+				if (newPathPlotAfterReceiveParseNotification)
+					newPathPlotAfterParse();
+			} else if (me.getID() == GUIModelEvent.MODEL_PARSE_FAILED) {
+				newPathAfterReceiveParseNotification = false;
+				newPathPlotAfterReceiveParseNotification = false;			}
 
 		} else if (e instanceof GUIComputationEvent) {
 			if (e.getID() == GUIComputationEvent.COMPUTATION_START) {

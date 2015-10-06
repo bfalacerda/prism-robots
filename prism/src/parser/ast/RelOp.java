@@ -1,77 +1,147 @@
 package parser.ast;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
+import prism.PrismLangException;
 
 /**
  * Class to represent a relational operator (or similar) found in a P/R/S operator.
  */
-public enum RelOp {
+public enum RelOp
+{
+	GT(">") {
+		@Override
+		public boolean isLowerBound()
+		{
+			return true;
+		}
 
-	GT, GEQ, MIN, LEQ, LT, MAX, EQ;
+		@Override
+		public boolean isStrict()
+		{
+			return true;
+		}
 
-	protected static Map<RelOp, String> symbols;
-	static {
-		symbols = new HashMap<RelOp, String>();
-		symbols.put(RelOp.GT, ">");
-		symbols.put(RelOp.GEQ, ">=");
-		symbols.put(RelOp.MIN, "min=");
-		symbols.put(RelOp.LT, "<");
-		symbols.put(RelOp.LEQ, "<=");
-		symbols.put(RelOp.MAX, "max=");
-		symbols.put(RelOp.EQ, "=");
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			return LEQ;
+		}
+	},
+	GEQ(">=") {
+		@Override
+		public boolean isLowerBound()
+		{
+			return true;
+		}
+
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			return LT;
+		}
+	},
+	MIN("min=") {
+		@Override
+		public boolean isMin()
+		{
+			return true;
+		}
+
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			return MAX;
+		}
+	},
+	LT("<") {
+		@Override
+		public boolean isUpperBound()
+		{
+			return true;
+		}
+
+		@Override
+		public boolean isStrict()
+		{
+			return true;
+		}
+
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			return GEQ;
+		}
+	},
+	LEQ("<=") {
+		@Override
+		public boolean isUpperBound()
+		{
+			return true;
+		}
+
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			return GT;
+		}
+	},
+	MAX("max=") {
+		@Override
+		public boolean isMax()
+		{
+			return false;
+		}
+
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			return MIN;
+		}
+	},
+	EQ("=") {
+		@Override
+		public RelOp negate() throws PrismLangException
+		{
+			throw new PrismLangException("Cannot negate " + this);
+		}
+	};
+
+	private final String symbol;
+
+	private RelOp(String symbol)
+	{
+		this.symbol = symbol;
 	}
 
 	@Override
 	public String toString()
 	{
-		return symbols.get(this);
+		return symbol;
 	}
 
 	/**
-	 * Returns true if this corresponds to a lower bound (i.e. >, >=).
+	 * Returns true if this corresponds to a lower bound (i.e. &gt;, &gt;=).
 	 * NB: "min=?" does not return true for this.
 	 */
 	public boolean isLowerBound()
 	{
-		switch (this) {
-		case GT:
-		case GEQ:
-			return true;
-		default:
-			return false;
-		}
+		return false;
 	}
 
 	/**
-	 * Returns true if this corresponds to an upper bound (i.e. <, <=).
+	 * Returns true if this corresponds to an upper bound (i.e. &lt;, &lt;=).
 	 * NB: "max=?" does not return true for this.
 	 */
 	public boolean isUpperBound()
 	{
-		switch (this) {
-		case LT:
-		case LEQ:
-			return true;
-		default:
-			return false;
-		}
+		return false;
 	}
 
 	/**
-	 * Returns true if this is a strict bound (i.e. < or >).
+	 * Returns true if this is a strict bound (i.e. &lt; or &gt;).
 	 */
 	public boolean isStrict()
 	{
-		switch (this) {
-		case GT:
-		case LT:
-			return true;
-		default:
-			return false;
-		}
+		return false;
 	}
 
 	/**
@@ -79,12 +149,7 @@ public enum RelOp {
 	 */
 	public boolean isMin()
 	{
-		switch (this) {
-		case MIN:
-			return true;
-		default:
-			return false;
-		}
+		return false;
 	}
 
 	/**
@@ -92,27 +157,26 @@ public enum RelOp {
 	 */
 	public boolean isMax()
 	{
-		switch (this) {
-		case MAX:
-			return true;
-		default:
-			return false;
-		}
+		return false;
 	}
 
 	/**
+	 * Returns the negated form of this operator.
+	 */
+	public abstract RelOp negate() throws PrismLangException;
+
+	/**
 	 * Returns the RelOp object corresponding to a (string) symbol,
-	 * e.g. parseSymbol("<=") returns RelOp.LEQ. Returns null if invalid.
+	 * e.g. parseSymbol("&lt;=") returns RelOp.LEQ. Returns null if invalid.
 	 * @param symbol The symbol to look up
 	 * @return
 	 */
 	public static RelOp parseSymbol(String symbol)
 	{
-		Iterator<Entry<RelOp, String>> it = symbols.entrySet().iterator();
-		while (it.hasNext()) {
-			Map.Entry<RelOp, String> e = it.next();
-			if (e.getValue().equals(symbol))
-				return e.getKey();
+		for (RelOp relop : RelOp.values()) {
+			if (relop.toString().equals(symbol)) {
+				return relop;
+			}
 		}
 		return null;
 	}

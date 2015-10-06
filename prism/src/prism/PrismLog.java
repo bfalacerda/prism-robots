@@ -27,7 +27,9 @@
 
 package prism;
 
-public abstract class PrismLog
+import java.io.Closeable;
+
+public abstract class PrismLog implements Closeable, AutoCloseable
 {
 	/**
 	 * Specifies that only more important messages should be printed
@@ -373,7 +375,7 @@ public abstract class PrismLog
 	
 	/**
 	 * Prints a warning message {@code s}, preceded by "\nWarning: " and followed by a newline character.
-	 * <p/>
+	 * <br>
 	 * Also increases {@link #numberOfWarnings} by one. This variable can then be
 	 * queried using {@link #getNumberOfWarnings()} at the end of computation
 	 * and the user can be appropriately informed that there were warnings generated.
