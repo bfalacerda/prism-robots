@@ -12,5 +12,4 @@ cudd/include/*
 prism/.metadata/*
 prism/classes/*
 prism/.project
-*.jar
 prism/object/prism/ngprism
