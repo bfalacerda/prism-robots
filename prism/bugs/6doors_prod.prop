@@ -1,0 +1,5 @@
+//multi(R{"info"}max=?[ C ],  R{"time"}<=10 [ C  ], P>=0.81 [ F "dra_acc_state1" ])
+//multi(R{"info"}max=?[ C ],  R{"time"}min=? [ C  ], P>=0.81 [ F "dra_acc_state1" ]) nao funciona min max + boolean
+multi(R{"info"}max=?[ C ],  R{"time"}min=? [ C  ])
+//R{"time"}min=? [ F "dra_acc_state1"  ]
+//R{"info"}max=?[  F "dra_acc_state1"   ]

@@ -30,6 +30,8 @@ import java.util.*;
 
 import parser.*;
 import parser.visitor.*;
+import prism.ModelInfo;
+import prism.PrismException;
 import prism.PrismLangException;
 import prism.ModelType;
 import prism.PrismUtils;
@@ -37,7 +39,7 @@ import parser.type.*;
 
 // Class representing parsed model file
 
-public class ModulesFile extends ASTElement
+public class ModulesFile extends ASTElement implements ModelInfo
 {
 	// Model type (enum)
 	private ModelType modelType;
@@ -229,6 +231,24 @@ public class ModulesFile extends ASTElement
 		return formulaList;
 	}
 
+	@Override
+	public int getNumLabels()
+	{
+		return labelList.size();
+	}
+
+	@Override
+	public String getLabelName(int i) throws PrismException
+	{
+		return labelList.getLabelName(i);
+	}
+
+	@Override
+	public int getLabelIndex(String label)
+	{
+		return labelList.getLabelIndex(label);
+	}
+	
 	public LabelList getLabelList()
 	{
 		return labelList;
@@ -239,6 +259,7 @@ public class ModulesFile extends ASTElement
 		return constantList;
 	}
 
+	@Override
 	public ModelType getModelType()
 	{
 		return modelType;
@@ -558,6 +579,19 @@ public class ModulesFile extends ASTElement
 		return false;
 	}
 
+	@Override
+	public boolean containsUnboundedVariables()
+	{
+		int n = getNumVars();
+		for (int i = 0; i < n; i++) {
+			DeclarationType declType = getVarDeclaration(i).getDeclType();
+			if (declType instanceof DeclarationClock || declType instanceof DeclarationIntUnbounded) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	/**
 	 * Method to "tidy up" after parsing (must be called)
 	 * (do some checks and extract some information)
@@ -624,7 +658,7 @@ public class ModulesFile extends ASTElement
 		findAllActions(synchs);
 
 		// Various semantic checks 
-		semanticCheck(this);
+		doSemanticChecks();
 		// Type checking
 		typeCheck();
 		
@@ -922,6 +956,27 @@ public class ModulesFile extends ASTElement
 	}
 	
 	/**
+	  * Perform any required semantic checks.
+	  * These checks are done *before* any undefined constants have been defined.
+	 */
+	private void doSemanticChecks() throws PrismLangException
+	{
+		ModulesFileSemanticCheck visitor = new ModulesFileSemanticCheck(this);
+		accept(visitor);
+		
+	}
+	
+	/**
+	 * Perform further semantic checks that can only be done once values
+	 * for any undefined constants have been defined.
+	 */
+	public void doSemanticChecksAfterConstants() throws PrismLangException
+	{
+		ModulesFileSemanticCheckAfterConstants visitor = new ModulesFileSemanticCheckAfterConstants(this);
+		accept(visitor);
+	}
+
+	/**
 	 * Get  a list of constants in the model that are undefined
 	 * ("const int x;" rather than "const int x = 1;") 
 	 */
@@ -942,7 +997,7 @@ public class ModulesFile extends ASTElement
 	{
 		undefinedConstantValues = someValues == null ? null : new Values(someValues);
 		constantValues = constantList.evaluateConstants(someValues, null);
-		semanticCheckAfterConstants(this, null);
+		doSemanticChecksAfterConstants();
 	}
 
 	/**
@@ -955,7 +1010,7 @@ public class ModulesFile extends ASTElement
 	{
 		undefinedConstantValues = someValues == null ? null : new Values(someValues);
 		constantValues = constantList.evaluateSomeConstants(someValues, null);
-		semanticCheckAfterConstants(this, null);
+		doSemanticChecksAfterConstants();
 	}
 
 	/**

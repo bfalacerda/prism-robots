@@ -1,0 +1,4 @@
+const double d = 4;
+
+multi(  Pmax=? [F ("dra_acc_state1" & "in_time")], R{"info"}max=?[ C ])
+multi(  Pmax=? [F ("dra_acc_state1" & "in_time")], R{"info"}>=d[ C ])

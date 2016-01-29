@@ -62,7 +62,8 @@ public class PrismPythonTalker
             directory=workDir;
                         
             // Init PRISM
-            mainLog = new PrismDevNullLog(); 
+            mainLog = new PrismFileLog("stdout");
+            //mainLog = new PrismDevNullLog(); 
             prism = new Prism(mainLog, mainLog);
             prism.initialise();
         }
@@ -125,6 +126,7 @@ public class PrismPythonTalker
                 prism.setExportTarget(true);
                 prism.setExportTargetFilename(directory +  "/prod.lab");
                 prism.getSettings().setExportPropAut(true);
+                prism.getSettings().setExportPropAutType("txt");
                 prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
             } else {
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");               
