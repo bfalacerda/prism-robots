@@ -11,3 +11,6 @@ cudd/include/*
 prism/.metadata/*
 prism/classes/*
 prism/.project
+*.DS_Store*
+*.dylib
+*.jnilib
