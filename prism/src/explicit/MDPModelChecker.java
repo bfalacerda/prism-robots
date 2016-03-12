@@ -1097,7 +1097,7 @@ public class MDPModelChecker extends ProbModelChecker
 		// Export adversary
 		if (exportAdv) {
 			// Prune strategy
-			restrictStrategyToReachableStates(trimProdMdp, strat);
+			//restrictStrategyToReachableStates(trimProdMdp, strat);
 			// Export
 			PrismLog out = new PrismFileLog(exportAdvFilename);
 			new DTMCFromMDPMemorylessAdversary(trimProdMdp, strat).exportToPrismExplicitTra(out);

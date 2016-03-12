@@ -110,32 +110,46 @@ public class PrismPythonTalker
     }
     
     
-    public Result callPrism(String ltlString, boolean generatePolicy, boolean getStateVector)  {
+    public Result callPrism(String ltlString, boolean generatePolicy, boolean getStateVector, boolean partialSat)  {
         try {
             PropertiesFile prismSpec;
             Result result;        
             prism.setStoreVector(getStateVector);    
-            
-            if(generatePolicy){
+            if (partialSat){
+                prism.setEngine(Prism.EXPLICIT);
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "DTMC");
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV_FILENAME,directory + "/adv.tra");
                 prism.setExportProductStates(true);
                 prism.setExportProductStatesFilename(directory  + "/prod.sta");
-                prism.setExportProductTrans(true);
-                prism.setExportProductTransFilename(directory + "/prod.tra");
                 prism.setExportTarget(true);
                 prism.setExportTargetFilename(directory +  "/prod.lab");
                 prism.getSettings().setExportPropAut(true);
                 prism.getSettings().setExportPropAutType("txt");
                 prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
             } else {
-                prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");               
-                prism.setExportProductStates(false);
-                prism.setExportProductTrans(false);
-                prism.setExportTarget(false);
+                if(generatePolicy){
+                    prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "DTMC");
+                    prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV_FILENAME,directory + "/adv.tra");
+                    prism.setExportProductStates(true);
+                    prism.setExportProductStatesFilename(directory  + "/prod.sta");
+                    prism.setExportProductTrans(true);
+                    prism.setExportProductTransFilename(directory + "/prod.tra");
+                    prism.setExportTarget(true);
+                    prism.setExportTargetFilename(directory +  "/prod.lab");
+                    prism.getSettings().setExportPropAut(true);
+                    prism.getSettings().setExportPropAutType("txt");
+                    prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
+                } else {
+                    prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");               
+                    prism.setExportProductStates(false);
+                    prism.setExportProductTrans(false);
+                    prism.setExportTarget(false);
+                }
             }
             loadPrismModelFile();
-            prism.exportStatesToFile(Prism.EXPORT_PLAIN, new File(directory + "original.sta"));
+            if (!partialSat) {
+                prism.exportStatesToFile(Prism.EXPORT_PLAIN, new File(directory + "original.sta"));
+            }
             prismSpec=prism.parsePropertiesString(currentModel, ltlString);
             result = prism.modelCheck(prismSpec, prismSpec.getPropertyObject(0));
             return result;
@@ -152,7 +166,7 @@ public class PrismPythonTalker
     
     public static void main(String args[]) throws Exception {
         String command;
-        List<String> commands=Arrays.asList(new String[] {"check", "plan", "get_vector", "shutdown"});
+        List<String> commands=Arrays.asList(new String[] {"check", "plan", "get_vector", "shutdown", "partial_sat_plan"});
         String ack;        
         String toClient;
         String ltlString;   
@@ -180,7 +194,7 @@ public class PrismPythonTalker
                 }
                 if (command.equals("check")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,false,false);
+                    result=talker.callPrism(ltlString,false,false, false);
                     toClient = result.getResult().toString();
                     System.out.println("checked");
                     out.println(toClient);
@@ -188,15 +202,23 @@ public class PrismPythonTalker
                 }
                 if (command.equals("plan")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,true, false);
+                    result=talker.callPrism(ltlString,true, false, false);
                     toClient =  result.getResult().toString();
                     System.out.println("planned");
                     out.println(toClient);
                     continue;
                 }
+                if (command.equals("partial_sat_plan")){
+                    ltlString=in.readLine();
+                    result=talker.callPrism(ltlString,true, false, true);
+                    toClient = result.getResult().toString();
+                    System.out.println("partial sat policy generated");
+                    out.println(toClient);
+                    continue;
+                }
                 if (command.equals("get_vector")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,false, true);
+                    result=talker.callPrism(ltlString,false, true, false);
                     StateVector vect = result.getVector();
                     toClient="start";
                     out.println(toClient);
