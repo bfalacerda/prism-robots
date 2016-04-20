@@ -198,11 +198,25 @@ public class MDPModelChecker extends ProbModelChecker
 		//Get final prob result
 		double maxProb=probs.getDoubleArray()[model.getFirstInitialState()];
 		mainLog.println("\nMaximum probability to satisfy specification is " + maxProb);
+		
+		if (getExportProductVector()) {
+                                mainLog.println("\nExporting success probabilites over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1) + "\"...");
+                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1));
+                                probsProduct.print(out, false, false, false, false);
+                                out.close();
+                }
 				
 		rewsProduct = StateValues.createFromDoubleArray(res.solnProg, product.getProductModel());
 		rews = product.projectToOriginalModel(rewsProduct); 
 		double maxRew = rews.getDoubleArray()[model.getFirstInitialState()];
 		mainLog.println("\nFor p = " + maxProb + ", the maximum expected cummulative reward to satisfy specification is " + maxRew);
+		
+		if (getExportProductVector()) {
+                                mainLog.println("\nExporting expected progression reward over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2) + "\"...");
+                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2));
+                                rewsProduct.print(out, false, false, false, false);
+                                out.close();
+                }
 		
 		costsProduct = StateValues.createFromDoubleArray(res.solnCost, product.getProductModel());		
 		costs = product.projectToOriginalModel(costsProduct);	
@@ -212,6 +226,12 @@ public class MDPModelChecker extends ProbModelChecker
 //		System.out.println("Expected progression reward: " + maxRew);
 //		System.out.println("Expected time to execute task: " + minCost);
 //		System.out.println("--------------------------------------------------------------");
+                if (getExportProductVector()) {
+                                mainLog.println("\nExporting expected times until no more progression over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3) + "\"...");
+                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3));
+                                costsProduct.print(out, false, false, false, false);
+                                out.close();
+                }
 		
 		return costsProduct;
 		
@@ -301,6 +321,7 @@ public class MDPModelChecker extends ProbModelChecker
 
 		// Build product of MDP and automaton
 		AcceptanceType[] allowedAcceptance = {
+				AcceptanceType.BUCHI,
 				AcceptanceType.RABIN,
 				AcceptanceType.GENERALIZED_RABIN,
 				AcceptanceType.REACH
@@ -345,6 +366,14 @@ public class MDPModelChecker extends ProbModelChecker
 			probsProduct.plusConstant(1.0);
 		}
 
+		// Output vector over product, if required
+		if (getExportProductVector()) {
+				mainLog.println("\nExporting product solution vector matrix to file \"" + getExportProductVectorFilename() + "\"...");
+				PrismFileLog out = new PrismFileLog(getExportProductVectorFilename());
+				probsProduct.print(out, false, false, false, false);
+				out.close();
+		}
+		
 		// Mapping probabilities in the original model
 		probs = product.projectToOriginalModel(probsProduct);
 		probsProduct.clear();
@@ -409,6 +438,14 @@ public class MDPModelChecker extends ProbModelChecker
 		mcProduct = new MDPModelChecker(this);
 		mcProduct.inheritSettings(this);
 		rewardsProduct = StateValues.createFromDoubleArray(mcProduct.computeReachRewards(product.getProductModel(), productRewards, acc, minMax.isMin()).soln, product.getProductModel());
+		
+		// Output vector over product, if required
+		if (getExportProductVector()) {
+				mainLog.println("\nExporting product solution vector matrix to file \"" + getExportProductVectorFilename() + "\"...");
+				PrismFileLog out = new PrismFileLog(getExportProductVectorFilename());
+				rewardsProduct.print(out, false, false, false, false);
+				out.close();
+		}
 		
 		// Mapping rewards in the original model
 		rewards = product.projectToOriginalModel(rewardsProduct);
