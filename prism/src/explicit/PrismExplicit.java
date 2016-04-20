@@ -26,15 +26,25 @@
 
 package explicit;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
 
-import parser.ast.*;
+import parser.ast.Expression;
+import parser.ast.ModulesFile;
+import parser.ast.PropertiesFile;
 import parser.type.TypeBool;
-import prism.*;
+import prism.ModelGenerator;
+import prism.ModelType;
+import prism.Prism;
+import prism.PrismComponent;
+import prism.PrismException;
+import prism.PrismFileLog;
+import prism.PrismLangException;
+import prism.PrismLog;
+import prism.PrismNotSupportedException;
+import prism.PrismSettings;
+import prism.Result;
 import simulator.ModulesFileModelGenerator;
-import simulator.SimulatorEngine;
-import explicit.Model;
-import explicit.StateModelChecker;
 
 /**
  * This class connects PRISM to the various bits of explicit-state functionality that are implemented.
@@ -420,7 +430,7 @@ public class PrismExplicit extends PrismComponent
 		Prism prism;
 		try {
 			PrismLog mainLog = new PrismFileLog("stdout");
-			prism = new Prism(mainLog, mainLog);
+			prism = new Prism(mainLog);
 			//prism.initialise();
 			ModulesFile modulesFile = prism.parseModelFile(new File(args[0]));
 			modulesFile.setUndefinedConstants(null);
@@ -444,7 +454,7 @@ public class PrismExplicit extends PrismComponent
 		Prism prism;
 		try {
 			PrismLog log = new PrismFileLog("stdout");
-			prism = new Prism(log, log);
+			prism = new Prism(log);
 			prism.initialise();
 			prism.setDoProbChecks(false);
 			ModulesFile modulesFile = prism.parseModelFile(new File(args[0]));

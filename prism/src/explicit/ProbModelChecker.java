@@ -850,7 +850,7 @@ public class ProbModelChecker extends NonProbModelChecker
 		MinMax minMax = opInfo.getMinMax(model.getModelType(), forAll);
 
 		// Build rewards
-		RewardStruct rewStruct = expr.getRewardStructByIndexObject(modulesFile, constantValues);
+		RewardStruct rewStruct = expr.getRewardStructByIndexObject(modelInfo, constantValues);
 		mainLog.println("Building reward structure...");
 		Rewards rewards = constructRewards(model, rewStruct);
 
@@ -1022,6 +1022,7 @@ public class ProbModelChecker extends NonProbModelChecker
 			res = ((DTMCModelChecker) this).computeTotalRewards((DTMC) model, (MCRewards) modelRewards);
 			break;
 		case CTMC:
+			res = ((CTMCModelChecker) this).computeTotalRewards((CTMC) model, (MCRewards) modelRewards);
 			break;
 		case MDP:
 			break;

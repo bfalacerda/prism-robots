@@ -28,6 +28,7 @@ package prism;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,6 +75,7 @@ public class PrismCL implements PrismModelListener
 	private boolean exportdot = false;
 	private boolean exporttransdot = false;
 	private boolean exporttransdotstates = false;
+	private boolean exportmodeldotview = false;
 	private boolean exportsccs = false;
 	private boolean exportbsccs = false;
 	private boolean exportmecs = false;
@@ -114,7 +116,6 @@ public class PrismCL implements PrismModelListener
 
 	// files/filenames
 	private String mainLogFilename = "stdout";
-	private String techLogFilename = "stdout";
 	private String settingsFilename = null;
 	private String modelFilename = null;
 	private String importStatesFilename = null;
@@ -141,7 +142,6 @@ public class PrismCL implements PrismModelListener
 
 	// logs
 	private PrismLog mainLog = null;
-	private PrismLog techLog = null;
 
 	// prism object
 	private Prism prism = null;
@@ -502,14 +502,13 @@ public class PrismCL implements PrismModelListener
 	{
 		try {
 			// prepare storage for parametric model checking
-			// default to logs going to stdout
+			// default to log going to stdout
 			// this means all errors etc. can be safely sent to the log
 			// even if a new log is created shortly
 			mainLog = new PrismFileLog("stdout");
-			techLog = new PrismFileLog("stdout");
 
 			// create prism object(s)
-			prism = new Prism(mainLog, techLog);
+			prism = new Prism(mainLog);
 			prism.addModelListener(this);
 
 			// parse command line arguments
@@ -605,8 +604,12 @@ public class PrismCL implements PrismModelListener
 		}
 
 		// Load model into PRISM (if not done already)
-		if (!importtrans) {
-			prism.loadPRISMModel(modulesFile);
+		try {
+			if (!importtrans) {
+				prism.loadPRISMModel(modulesFile);
+			}
+		} catch (PrismException e) {
+			errorAndExit(e.getMessage());
 		}
 	}
 
@@ -767,6 +770,23 @@ public class PrismCL implements PrismModelListener
 			}
 		}
 
+		// export transition matrix graph to dot file and view it
+		if (exportmodeldotview) {
+			try {
+				File dotFile = File.createTempFile("prism-dot-", ".dot", null);
+				File dotPdfFile = File.createTempFile("prism-dot-", ".dot.pdf", null);
+				prism.exportTransToFile(exportordered, Prism.EXPORT_DOT_STATES, dotFile);
+				(new ProcessBuilder(new String[]{ "dot", "-Tpdf", "-o", dotPdfFile.getPath(), dotFile.getPath()})).start().waitFor();
+				(new ProcessBuilder(new String[]{ "open",dotPdfFile.getPath()})).start();
+			}
+			// in case of error, report it and proceed
+			catch (IOException | InterruptedException e) {
+				error("Problem generating dot file: " + e.getMessage());
+			} catch (PrismException e) {
+				error(e.getMessage());
+			}
+		}
+
 		// export labels/states
 		if (exportlabels) {
 			try {
@@ -913,7 +933,6 @@ public class PrismCL implements PrismModelListener
 		mainLog.println();
 		// Close logs (in case they are files)
 		mainLog.close();
-		techLog.close();
 	}
 
 	/** Set a timeout, exit program if timeout is reached */
@@ -1328,6 +1347,10 @@ public class PrismCL implements PrismModelListener
 						errorAndExit("No file specified for -" + sw + " switch");
 					}
 				}
+				// export transition matrix graph to dot file and view it
+				else if (sw.equals("exportmodeldotview")) {
+					exportmodeldotview = true;
+				}
 				// export transition matrix MTBDD to dot file
 				else if (sw.equals("exportdot")) {
 					if (i < args.length - 1) {
@@ -1444,6 +1467,15 @@ public class PrismCL implements PrismModelListener
 					if (i < args.length - 1) {
 						prism.setExportProductStates(true);
 						prism.setExportProductStatesFilename(args[++i]);
+					} else {
+						errorAndExit("No file specified for -" + sw + " switch");
+					}
+				}
+				// export product vector to file (hidden option)
+				else if (sw.equals("exportprodvector")) {
+					if (i < args.length - 1) {
+						prism.setExportProductVector(true);
+						prism.setExportProductVectorFilename(args[++i]);
 					} else {
 						errorAndExit("No file specified for -" + sw + " switch");
 					}
@@ -1628,20 +1660,6 @@ public class PrismCL implements PrismModelListener
 						}
 						mainLog = log;
 						prism.setMainLog(mainLog);
-					} else {
-						errorAndExit("No file specified for -" + sw + " switch");
-					}
-				}
-				// specify mtbdd log (hidden option)
-				else if (sw.equals("techlog")) {
-					if (i < args.length - 1) {
-						techLogFilename = args[++i];
-						log = new PrismFileLog(techLogFilename);
-						if (!log.ready()) {
-							errorAndExit("Couldn't open log file \"" + techLogFilename + "\"");
-						}
-						techLog = log;
-						prism.setTechLog(techLog);
 					} else {
 						errorAndExit("No file specified for -" + sw + " switch");
 					}
@@ -2337,7 +2355,7 @@ public class PrismCL implements PrismModelListener
 	 */
 	private void printListOfKeywords()
 	{
-		List<String> list = Prism.getListOfKeyords();
+		List<String> list = Prism.getListOfKeywords();
 		mainLog.print("PRISM keywords:");
 		for (String s : list) {
 			mainLog.print(" " + s);
@@ -2365,6 +2383,7 @@ public class PrismCL implements PrismModelListener
 		}
 		// Normal case: just display error message, but don't exit
 		mainLog.println("\nError: " + s + ".");
+		mainLog.flush();
 	}
 
 	/**
@@ -2374,6 +2393,7 @@ public class PrismCL implements PrismModelListener
 	{
 		prism.closeDown(false);
 		mainLog.println("\nError: " + s + ".");
+		mainLog.flush();
 		System.exit(1);
 	}
 
