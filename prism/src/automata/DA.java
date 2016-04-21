@@ -30,6 +30,7 @@
 package automata;
 
 import java.io.PrintStream;
+import java.lang.Math;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -486,6 +487,7 @@ public class DA<Symbol, Acceptance extends AcceptanceOmega>
 		int currentState;
 		int numEdges;
 		Double newDist;
+		Double minDist=Double.MAX_VALUE;
 		while(!queue.isEmpty()) {
 			currentState=queue.poll();
 			for (i = 0; i < size; i++) {
@@ -495,9 +497,16 @@ public class DA<Symbol, Acceptance extends AcceptanceOmega>
 					if (newDist < distsToAcc.get(i)) {
 						queue.add(i);
 						distsToAcc.set(i,newDist);
+						minDist=Math.min(minDist, newDist);
 					}
 				}
 			}						
-		}	
+		}
+		
+		//Make distance between states 1
+		//for(i = 0; i < size; i++) {
+                    //distsToAcc.set(i, Math.max(0, Math.log(distsToAcc.get(i)/minDist)/Math.log(2)+1));
+                   // System.out.println(distsToAcc.get(i));
+                //}
 	}
 }

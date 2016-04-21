@@ -140,7 +140,12 @@ public class MDPModelChecker extends ProbModelChecker
 		mainLog.println("Time for DFA distance to acceptance metric calculation: " + time / 1000.0 + " seconds.");
 		
 		//build product
-		product = mcLtl.constructProductModel(da, (MDP)model, labelBS, null);
+		int numStates = model.getNumStates();
+		BitSet bsInit = new BitSet(numStates);
+		for (int i = 0; i < numStates; i++) {
+			bsInit.set(i, model.isInitialState(i));
+		}
+		product = mcLtl.constructProductModel(da, (MDP)model, labelBS, bsInit);
 		
 //		System.out.println("The product MDP has " + product.getProductModel().getNumStates() + " states");
 
@@ -617,7 +622,9 @@ public class MDPModelChecker extends ProbModelChecker
 			List<BitSet> labels = Arrays.asList(bsInit, target);
 			List<String> labelNames = Arrays.asList("init", "target");
 			mainLog.println("\nExporting target states info to file \"" + getExportTargetFilename() + "\"...");
-			exportLabels(mdp, labels, labelNames, Prism.EXPORT_PLAIN, new PrismFileLog(getExportTargetFilename()));
+			PrismLog out = new PrismFileLog(getExportTargetFilename());
+			exportLabels(mdp, labels, labelNames, Prism.EXPORT_PLAIN, out);
+			out.close();
 		}
 
 		// If required, create/initialise strategy storage
@@ -952,7 +959,9 @@ public class MDPModelChecker extends ProbModelChecker
 			List<BitSet> labels = Arrays.asList(bsInit, target);
 			List<String> labelNames = Arrays.asList("init", "target");
 			mainLog.println("\nExporting target states info to file \"" + getExportTargetFilename() + "\"...");
-			exportLabels(trimProdMdp, labels, labelNames, Prism.EXPORT_PLAIN, new PrismFileLog(getExportTargetFilename()));
+			PrismLog out = new PrismFileLog(getExportTargetFilename());
+			exportLabels(trimProdMdp, labels, labelNames, Prism.EXPORT_PLAIN, out);
+			out.close();
 		}
 
 		// If required, create/initialise strategy storage
@@ -1790,7 +1799,9 @@ public class MDPModelChecker extends ProbModelChecker
 			List<BitSet> labels = Arrays.asList(bsInit, target);
 			List<String> labelNames = Arrays.asList("init", "target");
 			mainLog.println("\nExporting target states info to file \"" + getExportTargetFilename() + "\"...");
-			exportLabels(mdp, labels, labelNames, Prism.EXPORT_PLAIN, new PrismFileLog(getExportTargetFilename()));
+			PrismLog out = new PrismFileLog(getExportTargetFilename());
+			exportLabels(mdp, labels, labelNames, Prism.EXPORT_PLAIN, out);
+			out.close();
 		}
 
 		// If required, create/initialise strategy storage
