@@ -62,8 +62,7 @@ public class PrismPythonTalker
             directory=workDir;
                         
             // Init PRISM
-            mainLog = new PrismFileLog("stdout");
-            //mainLog = new PrismDevNullLog(); 
+            mainLog = new PrismDevNullLog(); 
             prism = new Prism(mainLog, mainLog);
             prism.initialise();
         }
@@ -110,16 +109,12 @@ public class PrismPythonTalker
     }
     
     
-    public Result callPrism(String ltlString, boolean generatePolicy, boolean getStateVector, boolean partialSat)  {
+    public Result callPrism(String ltlString, boolean generatePolicy, boolean getStateVector)  {
         try {
             PropertiesFile prismSpec;
             Result result;        
-            prism.setStoreVector(getStateVector);
-            if (partialSat){
-                prism.setEngine(Prism.EXPLICIT);
-            }
-            prism.setExportProductVector(true);
-            prism.setExportProductVectorFilename(directory + "/guarantees.txt");
+            prism.setStoreVector(getStateVector);    
+            
             if(generatePolicy){
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "DTMC");
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV_FILENAME,directory + "/adv.tra");
@@ -130,7 +125,6 @@ public class PrismPythonTalker
                 prism.setExportTarget(true);
                 prism.setExportTargetFilename(directory +  "/prod.lab");
                 prism.getSettings().setExportPropAut(true);
-                prism.getSettings().setExportPropAutType("txt");
                 prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
             } else {
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");               
@@ -156,7 +150,7 @@ public class PrismPythonTalker
     
     public static void main(String args[]) throws Exception {
         String command;
-        List<String> commands=Arrays.asList(new String[] {"check", "plan", "get_vector", "partial_sat_get_vector", "shutdown", "partial_sat_plan"});
+        List<String> commands=Arrays.asList(new String[] {"check", "plan", "get_vector", "shutdown"});
         String ack;        
         String toClient;
         String ltlString;   
@@ -184,7 +178,7 @@ public class PrismPythonTalker
                 }
                 if (command.equals("check")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,false,false, false);
+                    result=talker.callPrism(ltlString,false,false);
                     toClient = result.getResult().toString();
                     System.out.println("checked");
                     out.println(toClient);
@@ -192,27 +186,15 @@ public class PrismPythonTalker
                 }
                 if (command.equals("plan")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,true, false, false);
+                    result=talker.callPrism(ltlString,true, false);
                     toClient =  result.getResult().toString();
                     System.out.println("planned");
                     out.println(toClient);
                     continue;
                 }
-                if (command.equals("partial_sat_plan")){
+                if (command.equals("get_vector")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,true, false, true);
-                    toClient = result.getResult().toString();
-                    System.out.println("partial sat policy generated");
-                    out.println(toClient);
-                    continue;
-                }
-                if (command.contains("get_vector")){
-                    ltlString=in.readLine();
-                    if (command.equals("partial_sat_get_vector")){
-                        result=talker.callPrism(ltlString,false, true, true);
-                    } else {
-                        result=talker.callPrism(ltlString,false, true, false);
-                    }
+                    result=talker.callPrism(ltlString,false, true);
                     StateVector vect = result.getVector();
                     toClient="start";
                     out.println(toClient);
