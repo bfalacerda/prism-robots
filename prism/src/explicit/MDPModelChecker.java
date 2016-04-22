@@ -238,7 +238,7 @@ public class MDPModelChecker extends ProbModelChecker
                                 out.close();
                 }
 		
-		return costsProduct;
+		return costs;
 		
 	}
 	
