@@ -39,7 +39,7 @@ import parser.ast.*;
 * Test like this:
 * PRISM_MAINCLASS=prism.PrismTest bin/prism ../prism-examples/polling/poll2.sm ../prism-examples/polling/poll3.sm
 */
-public class PrismPythonTalker2
+public class PartialSatPrismPythonTalker
 {
     private Prism prism;
     private ModulesFile currentModel;
@@ -48,7 +48,7 @@ public class PrismPythonTalker2
     String fileName;
     int socketPort;
     
-    public PrismPythonTalker2(int port, String workDir, String prismFile){
+    public PartialSatPrismPythonTalker(int port, String workDir, String prismFile){
         try{
             PrismLog mainLog;
             
@@ -62,10 +62,12 @@ public class PrismPythonTalker2
             directory=workDir;
                         
             // Init PRISM
+            //mainLog = new PrismDevNullLog();
             mainLog = new PrismFileLog("stdout");
-            //mainLog = new PrismDevNullLog(); 
             prism = new Prism(mainLog, mainLog);
             prism.initialise();
+            setExports();
+            prism.setEngine(Prism.EXPLICIT);
         }
         catch (PrismException e) {
             System.out.println("Error: " + e.getMessage());
@@ -92,7 +94,27 @@ public class PrismPythonTalker2
         return socketPort;
     } 
     
-
+    public void setExports(){
+        try {
+            prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "DTMC");
+            prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV_FILENAME,directory + "/adv.tra");
+            prism.setExportProductStates(true);
+            prism.setExportProductStatesFilename(directory  + "/prod.sta");
+            prism.setExportProductTrans(true);
+            prism.setExportProductTransFilename(directory + "/prod.tra");
+            prism.setExportTarget(true);
+            prism.setExportTargetFilename(directory +  "/prod.lab");
+            prism.getSettings().setExportPropAut(true);
+            prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
+            prism.setExportProductVector(true);
+            prism.setExportProductVectorFilename(directory + "/guarantees.vect");
+        }
+        catch (PrismException e) {
+            System.out.println("File not found Error: " + e.getMessage());
+        }
+    }
+    
+    
     public boolean loadPrismModelFile(){
         try{
             currentModel = prism.parseModelFile(new File(directory+fileName));
@@ -109,17 +131,33 @@ public class PrismPythonTalker2
         }
     }
     
+
     
-    public Result callPrism(String ltlString, boolean generatePolicy, boolean getStateVector, boolean partialSat)  {
+    public boolean callPrismPartial(String ltlString) {
+        try {
+            Result result;
+            PropertiesFile prismSpec;
+            if (loadPrismModelFile()) {
+                prismSpec=prism.parsePropertiesString(currentModel, ltlString);
+                result = prism.modelCheck(prismSpec, prismSpec.getPropertyObject(0));
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        catch (PrismException e) {
+            System.out.println("Error: " + e.getMessage());
+            return false;
+        }
+    } 
+    
+    public Result callPrism(String ltlString, boolean generatePolicy, boolean getStateVector)  {
         try {
             PropertiesFile prismSpec;
             Result result;        
-            prism.setStoreVector(getStateVector);
-            if (partialSat){
-                prism.setEngine(Prism.EXPLICIT);
-            }
-            prism.setExportProductVector(true);
-            prism.setExportProductVectorFilename(directory + "/guarantees.txt");
+            prism.setStoreVector(getStateVector);    
+            
             if(generatePolicy){
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "DTMC");
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV_FILENAME,directory + "/adv.tra");
@@ -130,7 +168,6 @@ public class PrismPythonTalker2
                 prism.setExportTarget(true);
                 prism.setExportTargetFilename(directory +  "/prod.lab");
                 prism.getSettings().setExportPropAut(true);
-                prism.getSettings().setExportPropAutType("txt");
                 prism.getSettings().setExportPropAutFilename(directory + "/prod.aut");
             } else {
                 prism.getSettings().set(PrismSettings.PRISM_EXPORT_ADV, "None");               
@@ -156,15 +193,16 @@ public class PrismPythonTalker2
     
     public static void main(String args[]) throws Exception {
         String command;
-        List<String> commands=Arrays.asList(new String[] {"check", "plan", "get_vector", "partial_sat_get_vector", "shutdown", "partial_sat_plan"});
+        List<String> commands=Arrays.asList(new String[] {"check", "plan", "get_vector", "partial_sat_guarantees", "shutdown"});
         String ack;        
         String toClient;
         String ltlString;   
         Socket client;
         PropertiesFile propertiesFile;
         Result result;
+        boolean success;
 
-        PrismPythonTalker2 talker=new PrismPythonTalker2(Integer.parseInt(args[0]), args[1], args[2]); 
+        PartialSatPrismPythonTalker talker=new PartialSatPrismPythonTalker(Integer.parseInt(args[0]), args[1], args[2]); 
         client = talker.server.accept();
         System.out.println("got connection on port" + talker.getSocketPort());  
         BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
@@ -184,7 +222,7 @@ public class PrismPythonTalker2
                 }
                 if (command.equals("check")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,false,false, false);
+                    result=talker.callPrism(ltlString,false,false);
                     toClient = result.getResult().toString();
                     System.out.println("checked");
                     out.println(toClient);
@@ -192,27 +230,15 @@ public class PrismPythonTalker2
                 }
                 if (command.equals("plan")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,true, false, false);
+                    result=talker.callPrism(ltlString,true, false);
                     toClient =  result.getResult().toString();
                     System.out.println("planned");
                     out.println(toClient);
                     continue;
                 }
-                if (command.equals("partial_sat_plan")){
+                if (command.equals("get_vector")){
                     ltlString=in.readLine();
-                    result=talker.callPrism(ltlString,true, false, true);
-                    toClient = result.getResult().toString();
-                    System.out.println("partial sat policy generated");
-                    out.println(toClient);
-                    continue;
-                }
-                if (command.contains("get_vector")){
-                    ltlString=in.readLine();
-                    if (command.equals("partial_sat_get_vector")){
-                        result=talker.callPrism(ltlString,false, true, true);
-                    } else {
-                        result=talker.callPrism(ltlString,false, true, false);
-                    }
+                    result=talker.callPrism(ltlString,false, true);
                     StateVector vect = result.getVector();
                     toClient="start";
                     out.println(toClient);
@@ -235,6 +261,16 @@ public class PrismPythonTalker2
                         vect.clear();
                     }
                     out.println("end");
+                    continue;
+                }
+                if (command.equals("partial_sat_guarantees")){
+                    ltlString=in.readLine();
+                    success = talker.callPrismPartial(ltlString);
+                    if (success){
+                        out.println("success");
+                    } else {
+                        out.println("failure");
+                    }
                     continue;
                 }
                 if (command.equals("shutdown")){
