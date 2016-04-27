@@ -471,7 +471,7 @@ public class DA<Symbol, Acceptance extends AcceptanceOmega>
 		//initialise distances list
 		distsToAcc = new ArrayList<Double>(size);
 		BitSet acc = ((AcceptanceReach)acceptance).getGoalStates();				
-		int i;
+		int i, j;
 		Deque<Integer> queue = new ArrayDeque<Integer>();
 		for(i = 0; i < size; i++) {
 			if(acc.get(i)) {
@@ -502,6 +502,17 @@ public class DA<Symbol, Acceptance extends AcceptanceOmega>
 				}
 			}						
 		}
+                                        
+                BitSet reachableStates;
+                for (i=0; i < size; i++) {
+                        reachableStates=getReachableStates(i);
+                        for (j=0; j < size; j++) {
+                                if (reachableStates.get(j)) {
+                                        distsToAcc.set(i, Math.max(distsToAcc.get(i), distsToAcc.get(j)));
+                                }
+                        }
+                }
+                        
 		
 		//Make distance between states 1
 		//for(i = 0; i < size; i++) {
@@ -509,4 +520,31 @@ public class DA<Symbol, Acceptance extends AcceptanceOmega>
                    // System.out.println(distsToAcc.get(i));
                 //}
 	}
+                                        
+        /**
+         * Returns true iff state dest is reachable from state dest
+         */
+         
+        public BitSet getReachableStates(int src)
+        {
+                BitSet reachableStates= new BitSet(size);
+                Deque<Integer> queue = new ArrayDeque<Integer>();
+                int i, edgeTarget, currentState;
+                
+                reachableStates.set(src, true);
+                queue.add(src);
+                
+                while(!queue.isEmpty()) {
+                        currentState=queue.poll();
+                        for (i=0; i < getNumEdges(currentState); i++) {
+                                edgeTarget=getEdgeDest(currentState, i);
+                                if (!reachableStates.get(edgeTarget)) {
+                                        reachableStates.set(edgeTarget, true);
+                                        queue.add(edgeTarget);
+                                }
+                        }
+                }
+                return reachableStates;
+        }
+
 }
