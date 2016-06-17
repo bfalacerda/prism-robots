@@ -15,3 +15,5 @@ prism/.project
 *.dylib
 *.jnilib
 prism/lib/lpsolve55j.jar
+.classpath
+.project
