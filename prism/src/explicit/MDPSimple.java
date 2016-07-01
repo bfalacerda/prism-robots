@@ -848,6 +848,50 @@ public class MDPSimple extends MDPExplicit implements NondetModelSimple
 	}
 
 	@Override
+	public double mvDiscountedMultRewMinMaxSingle(int s, double vect[], MDPRewards mdpRewards, double discount, boolean min, int strat[])
+	{
+		int j, k, stratCh = -1;
+		double d, prob, minmax;
+		boolean first;
+		List<Distribution> step;
+
+		minmax = 0;
+		first = true;
+		j = -1;
+		step = trans.get(s);
+				
+		for (Distribution distr : step) {
+			j++;
+			// Compute sum for this distribution
+			d = mdpRewards.getTransitionReward(s, j);
+			for (Map.Entry<Integer, Double> e : distr) {
+				k = (Integer) e.getKey();
+				prob = (Double) e.getValue();
+				d = prob * (d + discount * vect[k]);
+			}
+			// Check whether we have exceeded min/max so far
+			if (first || (min && d < minmax) || (!min && d > minmax)) {
+				minmax = d;
+				// If strategy generation is enabled, remember optimal choice
+				if (strat != null)
+					stratCh = j;
+			}
+			first = false;
+		}
+		// If strategy generation is enabled, store optimal choice
+		if (strat != null & !first) {
+			// For max, only remember strictly better choices
+			if (min) {
+				strat[s] = stratCh;
+			} else if (strat[s] == -1 || minmax > vect[s]) {
+				strat[s] = stratCh;
+			}
+		}
+
+		return minmax;
+	}
+	
+	@Override
 	public double mvMultRewMinMaxSingle(int s, double vect[], MDPRewards mdpRewards, boolean min, int strat[])
 	{
 		int j, k, stratCh = -1;

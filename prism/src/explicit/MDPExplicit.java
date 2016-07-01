@@ -269,6 +269,16 @@ public abstract class MDPExplicit extends ModelExplicit implements MDP
 			result[s] = mvMultRewMinMaxSingle(s, vect, mdpRewards, min, strat);
 		}
 	}
+	
+	@Override
+	public void mvDiscountedMultRewMinMax(double vect[], MDPRewards mdpRewards, boolean min, double result[], double discount, BitSet subset, boolean complement, int strat[])
+	{
+		for (int s : new IterableStateSet(subset, numStates, complement)) {
+			result[s] = mvDiscountedMultRewMinMaxSingle(s, vect, mdpRewards, discount, min, strat);
+		}
+	}
+
+	
 
 	@Override
 	public double mvMultRewGSMinMax(double vect[], MDPRewards mdpRewards, boolean min, BitSet subset, boolean complement, boolean absolute, int strat[])

@@ -196,6 +196,20 @@ public interface MDP extends NondetModel
 	public void mvMultRewMinMax(double vect[], MDPRewards mdpRewards, boolean min, double result[], BitSet subset, boolean complement, int strat[]);
 
 	/**
+	 * Do a matrix-vector multiplication and sum of rewards followed by min/max, i.e. one step of value iteration.
+	 * i.e. for all s: result[s] = min/max_k { rew(s) + rew_k(s) + sum_j P_k(s,j)*vect[j] }
+	 * Optionally, store optimal (memoryless) strategy info. 
+	 * @param vect Vector to multiply by
+	 * @param mdpRewards The rewards
+	 * @param min Min or max for (true=min, false=max)
+	 * @param result Vector to store result in
+	 * @param subset Only do multiplication for these rows (ignored if null)
+	 * @param complement If true, {@code subset} is taken to be its complement (ignored if {@code subset} is null)
+	 * @param strat Storage for (memoryless) strategy choice indices (ignored if null)
+	 */
+	public void mvDiscountedMultRewMinMax(double vect[], MDPRewards mdpRewards, boolean min, double result[], double discount, BitSet subset, boolean complement, int strat[]);
+
+	/**
 	 * Do a single row of matrix-vector multiplication and sum of rewards followed by min/max.
 	 * i.e. return min/max_k { rew(s) + rew_k(s) + sum_j P_k(s,j)*vect[j] }
 	 * Optionally, store optimal (memoryless) strategy info. 
@@ -215,6 +229,21 @@ public interface MDP extends NondetModel
 	 * @param vect Vector to multiply by
 	 * @param mcRewards The rewards
 	 */
+	
+	/**
+	 * Do a matrix-vector multiplication and sum of rewards followed by min/max, i.e. one step of value iteration.
+	 * i.e. for all s: result[s] = min/max_k { rew(s) + rew_k(s) + sum_j P_k(s,j)*vect[j] }
+	 * Optionally, store optimal (memoryless) strategy info. 
+	 * @param vect Vector to multiply by
+	 * @param mdpRewards The rewards
+	 * @param min Min or max for (true=min, false=max)
+	 * @param result Vector to store result in
+	 * @param subset Only do multiplication for these rows (ignored if null)
+	 * @param complement If true, {@code subset} is taken to be its complement (ignored if {@code subset} is null)
+	 * @param strat Storage for (memoryless) strategy choice indices (ignored if null)
+	 */
+	public double mvDiscountedMultRewMinMaxSingle(int s, double vect[], MDPRewards mdpRewards, double discount, boolean min, int strat[]);
+
 	public double mvMultRewSingle(int s, int i, double vect[], MCRewards mcRewards);
 
 	/**

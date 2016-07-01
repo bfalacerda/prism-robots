@@ -70,6 +70,7 @@ import explicit.DTMC;
 import explicit.DTMCModelChecker;
 import explicit.FastAdaptiveUniformisation;
 import explicit.FastAdaptiveUniformisationModelChecker;
+import explicit.MCTSModelChecker;
 
 /**
  * Main class for all PRISM's core functionality.
@@ -2794,6 +2795,12 @@ public class Prism extends PrismComponent implements PrismSettingsListener
 			FastAdaptiveUniformisationModelChecker fauMC;
 			fauMC = new FastAdaptiveUniformisationModelChecker(this, currentModulesFile, propertiesFile);
 			return fauMC.check(prop.getExpression());
+		}
+		// For MCTS
+		if (currentModelType == ModelType.MDP && settings.getString(PrismSettings.PRISM_MDP_SOLN_METHOD).equals("MCTS")) {
+			MCTSModelChecker mctsMC;
+			mctsMC = new MCTSModelChecker(this, currentModulesFile, propertiesFile);
+			return mctsMC.check(prop.getExpression());
 		}
 		// Auto-switch engine if required
 		else if (currentModelType == ModelType.MDP && !Expression.containsMultiObjective(prop.getExpression())) {

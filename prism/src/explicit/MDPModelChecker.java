@@ -53,6 +53,7 @@ import prism.PrismFileLog;
 import prism.PrismLog;
 import prism.PrismUtils;
 import strat.MDStrategyArray;
+import strat.MDStrategy;
 import acceptance.AcceptanceOmega;
 import acceptance.AcceptanceReach;
 import acceptance.AcceptanceType;
@@ -87,10 +88,152 @@ public class MDPModelChecker extends ProbModelChecker
 		switch (expr.getNameCode()) {
 		case ExpressionFunc.PARTIAL:
 			return checkPartialSat(model, expr, statesOfInterest);
+		case ExpressionFunc.APPROX:
+			return computeApproximateSol(model, expr, statesOfInterest);
 		default:
 			return super.checkExpressionFunc(model, expr, statesOfInterest);
 		}
 	}
+
+	
+	protected StateValues computeApproximateSol(Model model, ExpressionFunc expr, BitSet statesOfInterest) throws PrismException
+	{
+		LTLModelChecker mcLtl;		
+		StateValues probsProduct, probs, costsProduct, costs, rewsProduct, rews;
+		MDPModelChecker mcProduct;
+		LTLModelChecker.LTLProduct<MDP> product;
+		DA<BitSet, ? extends AcceptanceOmega> da;
+		Vector<BitSet> labelBS;
+		MDP sparseMdp;
+		
+		
+		// For LTL model checking routines
+		mcLtl = new LTLModelChecker(this);
+		
+		//Get LTL spec
+		ExpressionReward exprRew = (ExpressionReward) expr.getOperand(0);		 
+		Expression ltl = exprRew.getExpression();
+
+		
+		// Build model costs
+		RewardStruct  costStruct = exprRew.getRewardStructByIndexObject(modulesFile, modulesFile.getConstantValues());
+		mainLog.println("Building cost structure...");
+		Rewards costsModel= constructRewards(model, costStruct);
+		
+		//build DFA
+		AcceptanceType[] allowedAcceptance = {
+				AcceptanceType.RABIN,
+				AcceptanceType.REACH
+		};
+		labelBS = new Vector<BitSet>();
+		da = mcLtl.constructDAForLTLFormula(this, model, ltl, labelBS, allowedAcceptance);
+		
+		
+		//calculate distances to accepting states
+		long time = System.currentTimeMillis();
+		da.setDistancesToAcc(); //TODO isto para full LTL
+		time = System.currentTimeMillis() - time;
+		mainLog.println("\nAutomaton state distances to an accepting state: " + da.getDistsToAcc());
+		mainLog.println("Time for DFA distance to acceptance metric calculation: " + time / 1000.0 + " seconds.");
+		
+		//build product
+		int numStates = model.getNumStates();
+		BitSet bsInit = new BitSet(numStates);
+		for (int i = 0; i < numStates; i++) {
+			bsInit.set(i, model.isInitialState(i));
+		}
+		product = mcLtl.constructProductModel(da, (MDP)model, labelBS, bsInit);
+
+		// Find accepting states + compute reachability probabilities
+		BitSet acc;
+		if (product.getAcceptance() instanceof AcceptanceReach) {
+			mainLog.println("\nSkipping accepting MEC computation since acceptance is defined via goal states...");
+			acc = ((AcceptanceReach)product.getAcceptance()).getGoalStates();
+		} else {
+			mainLog.println("\nFinding accepting MECs...");
+			acc = mcLtl.findAcceptingECStates(product.getProductModel(), product.getAcceptance());
+		}
+		
+		time = System.currentTimeMillis();
+		//Build progression rewards on product
+		MDPRewards progRewards = product.liftProgressionFromAutomaton(da.getDistsToAcc());
+		time = System.currentTimeMillis() - time;
+		mainLog.println("Time for lifting progression reward from automaton to product: " + time / 1000.0 + " seconds.");	
+		
+		time = System.currentTimeMillis();
+		//Build trimmed product costs
+		MDPRewards prodCosts = ((MDPRewards)costsModel).liftFromModel(product);
+		time = System.currentTimeMillis() - time;
+		mainLog.println("Time for lifting cost function from original model to product: " + time / 1000.0 + " seconds.");
+		
+		
+		// Output product, if required
+		if (getExportProductTrans()) {
+				mainLog.println("\nExporting product transition matrix to file \"" + getExportProductTransFilename() + "\"...");
+				product.getProductModel().exportToPrismExplicitTra(getExportProductTransFilename());
+		}
+		if (getExportProductStates()) {
+			mainLog.println("\nExporting product state space to file \"" + getExportProductStatesFilename() + "\"...");
+			PrismFileLog out = new PrismFileLog(getExportProductStatesFilename());
+			VarList newVarList = (VarList) modulesFile.createVarList().clone();
+			String daVar = "_da";
+			while (newVarList.getIndex(daVar) != -1) {
+				daVar = "_" + daVar;
+			}
+			newVarList.addVar(0, new Declaration(daVar, new DeclarationIntUnbounded()), 1, null);
+			product.getProductModel().exportStates(Prism.EXPORT_PLAIN, newVarList, out);
+			out.close();
+		}
+		
+		// Find accepting states + compute reachability probabilities
+		mainLog.println("\nComputing reachability probabilities...");
+		mcProduct = new MDPModelChecker(this);
+		mcProduct.inheritSettings(this);				
+				
+		sparseMdp = new MDPSparse((MDPSimple)product.getProductModel());
+		ModelCheckerPartialSatResult res = mcProduct.iterateDiscountedRewards(sparseMdp, acc, progRewards, prodCosts,0.19,0.05,0.99);
+		//ModelCheckerPartialSatResult res = mcProduct.computeApproximateSol((MDP)model, progRewards, (MDPRewards)costsModel, progStates);
+		probsProduct = StateValues.createFromDoubleArray(res.solnProb, sparseMdp);
+		// Mapping probabilities in the original model
+		probs = product.projectToOriginalModel(probsProduct);		
+		//Get final prob result
+		double maxProb=probs.getDoubleArray()[model.getFirstInitialState()];
+		mainLog.println("\nThe generated policy will satisfy specification with probability " + maxProb);
+		
+		if (getExportProductVector()) {
+                                mainLog.println("\nExporting success probabilites over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1) + "\"...");
+                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1));
+                                probsProduct.print(out, false, false, false, false);
+                                out.close();
+                }
+				
+		rewsProduct = StateValues.createFromDoubleArray(res.solnProg, sparseMdp);
+		rews = product.projectToOriginalModel(rewsProduct); 
+		double maxRew = rews.getDoubleArray()[model.getFirstInitialState()];
+		mainLog.println("\nThe generated policy  has an expected cummulative reward to satisfy specification is " + maxRew);
+		
+		if (getExportProductVector()) {
+                                mainLog.println("\nExporting expected progression reward over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2) + "\"...");
+                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2));
+                                rewsProduct.print(out, false, false, false, false);
+                                out.close();
+                }
+		
+		costsProduct = StateValues.createFromDoubleArray(res.solnCost, sparseMdp);		
+		costs = product.projectToOriginalModel(costsProduct);	
+		double minCost = costs.getDoubleArray()[model.getFirstInitialState()];
+		mainLog.println("\nThe generated policy has an expected  cummulative cost to finish of " + minCost);
+        if (getExportProductVector()) {
+                        mainLog.println("\nExporting expected times until no more progression over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3) + "\"...");
+                        PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3));
+                        costsProduct.print(out, false, false, false, false);
+                        out.close();
+        }
+		
+		return costs;
+		
+	}	
+
 
 	protected StateValues checkPartialSat(Model model, ExpressionFunc expr, BitSet statesOfInterest) throws PrismException
 	{
@@ -98,6 +241,7 @@ public class MDPModelChecker extends ProbModelChecker
 		StateValues probsProduct, probs, costsProduct, costs, rewsProduct, rews;
 		MDPModelChecker mcProduct;
 		LTLModelChecker.LTLProduct<MDP> product;
+		MDP productMdp;
 		DA<BitSet, ? extends AcceptanceOmega> da;
 		Vector<BitSet> labelBS;
 		
@@ -191,13 +335,19 @@ public class MDPModelChecker extends ProbModelChecker
 			out.close();
 		}
 		
-		// Find accepting states + compute reachability probabilities
-		mainLog.println("\nComputing reachability probabilities...");
 		mcProduct = new MDPModelChecker(this);
-		mcProduct.inheritSettings(this);				
-				
-		ModelCheckerPartialSatResult res = mcProduct.computeNestedValIter((MDP)product.getProductModel(), acc, progRewards, prodCosts, progStates);
-		probsProduct = StateValues.createFromDoubleArray(res.solnProb, product.getProductModel());
+		mcProduct.inheritSettings(this);
+		
+		if (product.getProductModel().getNumStates() > 10000) {
+			mainLog.println("\nChanging product to MDPSparse...");
+			productMdp = new MDPSparse((MDPSimple)product.getProductModel());
+		} else {
+			productMdp = (MDP)product.getProductModel();
+		}
+		
+		mainLog.println("\nComputing reachability probability, expected progression, and expected cost...");
+		ModelCheckerPartialSatResult res = mcProduct.computeNestedValIter(productMdp, acc, progRewards, prodCosts, progStates);
+		probsProduct = StateValues.createFromDoubleArray(res.solnProb, productMdp);
 		// Mapping probabilities in the original model
 		probs = product.projectToOriginalModel(probsProduct);		
 		//Get final prob result
@@ -211,7 +361,7 @@ public class MDPModelChecker extends ProbModelChecker
                                 out.close();
                 }
 				
-		rewsProduct = StateValues.createFromDoubleArray(res.solnProg, product.getProductModel());
+		rewsProduct = StateValues.createFromDoubleArray(res.solnProg, productMdp);
 		rews = product.projectToOriginalModel(rewsProduct); 
 		double maxRew = rews.getDoubleArray()[model.getFirstInitialState()];
 		mainLog.println("\nFor p = " + maxProb + ", the maximum expected cummulative reward to satisfy specification is " + maxRew);
@@ -223,7 +373,7 @@ public class MDPModelChecker extends ProbModelChecker
                                 out.close();
                 }
 		
-		costsProduct = StateValues.createFromDoubleArray(res.solnCost, product.getProductModel());		
+		costsProduct = StateValues.createFromDoubleArray(res.solnCost, productMdp);		
 		costs = product.projectToOriginalModel(costsProduct);	
 		double minCost = costs.getDoubleArray()[model.getFirstInitialState()];
 		mainLog.println("\nFor p = " + maxProb + ", r = " +  + maxRew + " the minimum expected  cummulative cost to satisfy specification is " + minCost);
@@ -231,12 +381,12 @@ public class MDPModelChecker extends ProbModelChecker
 //		System.out.println("Expected progression reward: " + maxRew);
 //		System.out.println("Expected time to execute task: " + minCost);
 //		System.out.println("--------------------------------------------------------------");
-                if (getExportProductVector()) {
-                                mainLog.println("\nExporting expected times until no more progression over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3) + "\"...");
-                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3));
-                                costsProduct.print(out, false, false, false, false);
-                                out.close();
-                }
+        if (getExportProductVector()) {
+                        mainLog.println("\nExporting expected times until no more progression over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3) + "\"...");
+                        PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3));
+                        costsProduct.print(out, false, false, false, false);
+                        out.close();
+        }
 		
 		return costs;
 		
@@ -293,12 +443,12 @@ public class MDPModelChecker extends ProbModelChecker
 		
 		int nTrims = 0;
 		//trim rewards according to progression metric TODO: THis can be removed because now we return the progStates
-		for(int i = 0; i < numStates; i++) {
+	/*	for(int i = 0; i < numStates; i++) {
 			if(!progStates.get(i)) {
 				prodCosts.clearRewards(i);
 				nTrims++;
 			}
-		}	
+		}	*/
 		
 		time = System.currentTimeMillis() - time;
 		mainLog.println("\nCleared costs for " + nTrims + " states where no more progression towards goal is possible.");
@@ -913,6 +1063,126 @@ public class MDPModelChecker extends ProbModelChecker
 		return u;
 	}
 
+	
+	protected MDPRewards buildMixRewards(MDP mdp, BitSet acc, MDPRewards progRewards, MDPRewards prodCosts)
+	{		
+		int i, j, nChoices;
+		int n = mdp.getNumStates();
+		double rew;
+		MDPRewardsSimple res = new MDPRewardsSimple(n);
+		
+		
+		for (i = 0; i < n; i++) {
+			nChoices = mdp.getNumChoices(i);
+			if(!acc.get(i)) {
+				for (j = 0; j < nChoices; j++) {
+					rew =-prodCosts.getTransitionReward(i, j);
+					if (progRewards.getTransitionReward(i, j) > 0) {
+						rew = rew + 1000;
+					}
+					res.setTransitionReward(i, j, rew);
+				}
+			}
+		}
+		
+		//return prodCosts;
+		return res;
+	}
+	
+	
+	protected ModelCheckerPartialSatResult iterateDiscountedRewards(MDP mdp,  BitSet acc, MDPRewards progRewards, MDPRewards prodCosts, double startDiscount, double discountStep, double maxDiscount)
+			throws PrismException
+	{
+		int n;
+		ModelCheckerPartialSatResult res;
+		MDPRewards rewards;
+		ModelCheckerResult discountedVIRes, mcCheckProb, mcCheckProg, mcCheckCost;
+		DTMCModelChecker mcDTMC;
+		DTMC dtmc;
+		MCRewards mcProgRewards, mcCosts;
+		long timer, timerGlobal;
+		double currentDiscount;
+		BitSet known;
+		double previousRes[];
+		MDStrategy prevStrat;
+		
+		timerGlobal = System.currentTimeMillis();
+		
+		n = mdp.getNumStates();
+		known = new BitSet(n);
+		previousRes = null;
+		prevStrat = null;
+		
+		rewards = buildMixRewards(mdp, acc, progRewards, prodCosts);		
+		discountedVIRes = mcCheckProb = mcCheckProg = mcCheckCost = null;
+		currentDiscount = startDiscount;
+		while (currentDiscount <= maxDiscount) {
+			discountedVIRes = computeDiscountedCumulativeRewardsOptimalPolicy(mdp, rewards, currentDiscount, false, known, previousRes, prevStrat);
+//			previousRes = discountedVIRes.soln;
+//			if (!known.get(0)) {
+//				known.flip(0, n);
+//			}
+			prevStrat = (MDStrategy)discountedVIRes.strat;
+			BitSet no = restrictStrategyToReachableStates(mdp, (MDStrategy)discountedVIRes.strat);
+			no.flip(0,n);
+			dtmc = new DTMCFromMDPAndMDStrategy(mdp, prevStrat);
+			
+			
+			mcProgRewards = new MCRewardsFromMDPRewards(progRewards, prevStrat);
+			mcCosts = new MCRewardsFromMDPRewards(prodCosts, prevStrat);
+
+			
+			// Create a DTMC model checker (for solving policies)
+			mcDTMC = new DTMCModelChecker(this);
+			mcDTMC.inheritSettings(this);
+			mcDTMC.setLog(new PrismDevNullLog());
+			
+			
+			timer = System.currentTimeMillis();
+			mcCheckProb = mcDTMC.computeReachProbsGaussSeidel(dtmc, no, acc, null, null);		
+			timer = System.currentTimeMillis() - timer;
+			mainLog.println(" DTMC prob verification took " + timer / 1000.0 + " seconds.");
+			
+			timer = System.currentTimeMillis();
+			//mcCheckRes = mcDTMC.computeTotalRewards(dtmc, mcProgRewards);
+			//mcCheckRes = mcDTMC.computeCumulativeRewards(dtmc, mcProgRewards, 0.3);
+			//mcCheckRes = mcDTMC.computeReachRewards(dtmc, mcProgRewards, acc, null, null);
+			mcCheckProg = mcDTMC.computeReachRewardsValIter(dtmc, mcProgRewards, acc, no, null, null);
+			timer = System.currentTimeMillis() - timer;
+			mainLog.println(" DTMC prog verification took " + timer / 1000.0 + " seconds. Result=" + mcCheckProg.soln[0]);
+			
+			timer = System.currentTimeMillis();
+			mcCheckCost = mcDTMC.computeReachRewardsValIter(dtmc, mcCosts, acc, no, null, null);
+			timer = System.currentTimeMillis() - timer;
+			mainLog.println(" DTMC cost verification took " + timer / 1000.0 + " seconds. Result=" + mcCheckCost.soln[0]);
+				
+			currentDiscount = currentDiscount + discountStep;
+		}
+		
+		
+		// Export adversary
+		if (exportAdv) {
+			// Export
+			System.out.println("EXPORTING");
+			PrismLog out = new PrismFileLog(exportAdvFilename);
+			new DTMCFromMDPAndMDStrategy(mdp, prevStrat).exportToPrismExplicitTra(out);
+			out.close();
+		}
+
+		// Return results
+		res = new ModelCheckerPartialSatResult();
+		// Store strategy
+		res.strat = prevStrat;
+		res.solnProb = mcCheckProb.soln;
+		res.solnProg = mcCheckProg.soln;
+		res.solnCost = mcCheckCost.soln;
+		res.numIters = 100000000;
+		res.timeTaken = timerGlobal / 1000.0;
+		return res;
+
+	}
+	
+	
 	
 	/**
 	 * Compute reachability probabilities using value iteration.
@@ -1668,6 +1938,80 @@ public class MDPModelChecker extends ProbModelChecker
 		return res;
 	}
 
+	
+	/**
+	 * Compute expected cumulative (step-bounded) rewards.
+	 * i.e. compute the min/max reward accumulated within {@code k} steps.
+	 * @param mdp The MDP
+	 * @param mdpRewards The rewards
+	 * @param target Target states
+	 * @param min Min or max rewards (true=min, false=max)
+	 */
+	public ModelCheckerResult computeDiscountedCumulativeRewardsOptimalPolicy(MDP mdp, MDPRewards mdpRewards, double discount, boolean min, BitSet known, double init[], MDStrategy prevStrat) throws PrismException
+	{
+		ModelCheckerResult res = null;
+		int i, n, iters;
+		long timer;
+		double soln[], soln2[], tmpsoln[];
+		boolean done;
+		int[] strat;
+
+		// Start expected cumulative reward
+		timer = System.currentTimeMillis();
+		mainLog.println("\nStarting expected discounted cumulative reward (" + (min ? "min" : "max") + "), with discount " + discount + "...");
+
+		// Store num states
+		n = mdp.getNumStates();
+			
+
+		// Create/initialise solution vector(s)
+		strat =  new int[n];
+		soln = new double[n];
+		soln2 = new double[n];
+		for (i = 0; i < n; i++) {
+			if (known.get(i)) {
+				soln[i] = soln2[i] = init[i];
+				strat[i] = prevStrat.getChoiceIndex(i);
+			} else {
+				soln[i] = soln2[i] = 0.0;
+				strat[i] = 0;
+			}
+		}
+			
+
+		// Start iterations
+		iters = 0;
+		done = false;
+		while (!done && iters < maxIters) {
+			iters++;
+			// Matrix-vector multiply and min/max ops
+			mdp.mvDiscountedMultRewMinMax(soln, mdpRewards, min, soln2, discount, null, false, strat);
+			// Swap vectors for next iter
+			done = PrismUtils.doublesAreClose(soln, soln2, termCritParam, termCrit == TermCrit.ABSOLUTE);
+			tmpsoln = soln;
+			soln = soln2;
+			soln2 = tmpsoln;
+		}
+
+		// Finished value iteration
+		timer = System.currentTimeMillis() - timer;
+		mainLog.print("Expected cumulative reward (" + (min ? "min" : "max") + ")");
+		mainLog.println(" took " + iters + " iterations and " + timer / 1000.0 + " seconds.");
+
+		restrictStrategyToReachableStates(mdp, strat);
+		
+		// Return results
+		res = new ModelCheckerResult();
+		res.soln = soln;
+		res.numIters = iters;
+		res.timeTaken = timer / 1000.0;
+		res.strat =  new MDStrategyArray(mdp, strat);
+
+		return res;
+	}
+
+	
+	
 	/**
 	 * Compute expected cumulative (step-bounded) rewards.
 	 * i.e. compute the min/max reward accumulated within {@code k} steps.
@@ -2190,7 +2534,7 @@ public class MDPModelChecker extends ProbModelChecker
 	 * @param mdp The MDP
 	 * @param strat The strategy
 	 */
-	public void restrictStrategyToReachableStates(MDP mdp, int strat[])
+	public BitSet restrictStrategyToReachableStates(MDP mdp, int strat[])
 	{
 		BitSet restrict = new BitSet();
 		BitSet explore = new BitSet();
@@ -2224,6 +2568,22 @@ public class MDPModelChecker extends ProbModelChecker
 		for (int s = restrict.nextClearBit(0); s < n; s = restrict.nextClearBit(s + 1)) {
 			strat[s] = -3;
 		}
+		return restrict;
+	}
+	
+	public BitSet restrictStrategyToReachableStates(MDP mdp, MDStrategy strat) {
+		int n, intStrat[];
+		BitSet res;
+				
+		n = strat.getNumStates();
+		intStrat = new int[n];
+		
+		for (int i = 0; i < n; i++) {
+			intStrat[i] = strat.getChoiceIndex(i);
+		}
+		res = restrictStrategyToReachableStates(mdp, intStrat);
+		strat = new MDStrategyArray(mdp, intStrat);
+		return res;
 	}
 
 	/**
