@@ -127,7 +127,7 @@ public class MCTSModelChecker extends PrismComponent
 	{
 		mainLog.println("BRUNO!!");
 		ModulesFileModelGenerator prismModelGen = new ModulesFileModelGenerator(modulesFile, this);
-		UCT uct = new UCT(this, prismModelGen, 0.8, 5);		
+		UCT uct = new UCT(this, prismModelGen, 100);		
 		RewardStruct rewStruct = expr.getRewardStructByIndexObject(modulesFile, constantValues);
 		uct.setRewardStruct(rewStruct);
 		uct.setConstantValues(constantValues);
