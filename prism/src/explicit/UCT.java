@@ -67,8 +67,11 @@ public final class UCT extends PrismComponent
 		private State state;
 		/** The action that was executed to reach this node */
 		private int action;
+		private String actionName;
 		/** The probability of reaching this node */
 		private double reachProb;
+		/** true iff it is a decision node */
+		private boolean decision;
 		/** number of rollouts that have visited this node */
 		private int numVisits;
 		/** Have the succs of this node been computed*/
@@ -85,10 +88,12 @@ public final class UCT extends PrismComponent
 		 * @param state The MDP state representation
 		 * @param action The action that brought the UCT search to this node.
 		 */
-		UCTNode(State state, int action, double reachProb)
+		UCTNode(State state, int action, String actionName, double reachProb, boolean decision)
 		{
+			this.decision = decision;
 			this.state = state;
 			this.action = action;
+			this.actionName = actionName;
 			this.reachProb = reachProb;
 			this.numVisits = 0;
 			this.expanded = false;
@@ -232,7 +237,7 @@ public final class UCT extends PrismComponent
 		
 		boolean isDecisionNode()
 		{
-			return action == -1;
+			return decision;
 		}
 		
 		double getUCTScore(double parentVisits, double bias)
@@ -240,7 +245,7 @@ public final class UCT extends PrismComponent
 			if (numVisits == 0) {
 				return Double.MAX_VALUE;
 			} else {
-				return bias*Math.sqrt(parentVisits/numVisits) + expectedRewEstimate;
+				return bias*Math.sqrt(Math.log(parentVisits)/numVisits) + expectedRewEstimate;
 			}
 		}
 	}
@@ -252,8 +257,6 @@ public final class UCT extends PrismComponent
 	private ModelGenerator modelGen;
 	/** rollout depth */
 	private int depth;
-	/** bias for UCT formula calculation */
-	private double bias;
 	
 	/** reward structure to use for analysis */
 	private RewardStruct rewStruct = null;
@@ -271,12 +274,11 @@ public final class UCT extends PrismComponent
 	/**
 	 * Constructor.
 	 */
-	public UCT(PrismComponent parent, ModelGenerator modelGen, double bias, int depth) throws PrismException
+	public UCT(PrismComponent parent, ModelGenerator modelGen, int depth) throws PrismException
 	{
 		super(parent);
 		
 		this.modelGen = modelGen;
-		this.bias = bias;
 		this.depth = depth;
 		rewStruct = null;
 		constantValues = null;
@@ -314,16 +316,19 @@ public final class UCT extends PrismComponent
 			nc = modelGen.getNumChoices();
 			succNodes = new UCTNode[nc];
 			for (i = 0; i < nc; i++) {
-				succNodes[i] = new UCTNode(node.state, i,-1);
+				succNodes[i] = new UCTNode(node.state, i, modelGen.getChoiceAction(i).toString(), -1, false);
 			}
 		}
 		else {
 			nt = modelGen.getNumTransitions(node.getAction());
+//			System.out.println("ACTION:" + modelGen.getTransitionAction(node.getAction()).toString());
 			succNodes = new UCTNode[nt];
 			for (i = 0; i < nt; i++) {
+//				System.out.println(node);
 				prob = modelGen.getTransitionProbability(node.getAction(), i);
+//				System.out.println("ACTION:" + node.getAction() + " PROB: " + prob);
 				State succState = modelGen.computeTransitionTarget(node.getAction(), i);
-				succNodes[i] = new UCTNode(succState, -1, prob);
+				succNodes[i] = new UCTNode(succState, node.getAction(), null, prob, true);
 				
 			}
 		}
@@ -331,7 +336,7 @@ public final class UCT extends PrismComponent
 		node.setAsExpanded();
 	}
 	
-	public UCTNode getBestUCTSucc(UCTNode node) {
+	public UCTNode getBestUCTSucc(UCTNode node, double bias) {
 		int i, numSuccs;
 		double score, maxScore = Double.MIN_VALUE;
 		UCTNode succNode, bestSucc;
@@ -346,6 +351,7 @@ public final class UCT extends PrismComponent
 				return succNode;
 			}
 			if (score > maxScore) {
+				maxScore = score;
 				bestSucc = succNode;
 			}
 		}
@@ -354,7 +360,7 @@ public final class UCT extends PrismComponent
 	}
 	
 	public double getReward(State state, String action) throws PrismException{
-		System.out.println("ACTION " + action);
+		//System.out.println("ACTION " + action);
 		int numStateItems = rewStruct.getNumItems();
 		double res = 0.0;
 		for (int i = 0; i < numStateItems; i++) {
@@ -362,8 +368,6 @@ public final class UCT extends PrismComponent
 			if (guard.evaluateBoolean(constantValues, state)) {
 				String currentAction = rewStruct.getSynch(i);
 				if (action.equals(currentAction)) {
-					double reward = rewStruct.getReward(i).evaluateDouble(constantValues, state);
-					System.out.print("ACTION " + action + "reward=" + reward);
 					res = res + rewStruct.getReward(i).evaluateDouble(constantValues, state);
 				}
 			}
@@ -392,7 +396,7 @@ public final class UCT extends PrismComponent
 		return currentSucc;
 	}
 	
-	public double rollout(UCTNode node, int depth) throws PrismException {
+	public double rollout(UCTNode node, int depth, double bias) throws PrismException {
 		double res = 0.0;
 		UCTNode succNode;
 		
@@ -406,21 +410,23 @@ public final class UCT extends PrismComponent
 
 		node.incrementNumVisits();
 		if (node.isDecisionNode()) {
-			succNode = getBestUCTSucc(node);
+			succNode = getBestUCTSucc(node, bias);
 			if (succNode == null) {
 				depth = 0;
 			} else {
-				modelGen.exploreState(succNode.getState());
-				String actionString =  modelGen.getTransitionAction(succNode.getAction()).toString();
-				modelGen.exploreState(node.getState());
-				res = getReward(node.getState(), actionString);
+//				modelGen.exploreState(succNode.getState());
+//				String actionString =  modelGen.getTransitionAction(succNode.getAction(), 0).toString();
+//				modelGen.exploreState(node.getState());
+//				res = getReward(node.getState(), actionString);
 			}
 		} else {
+			String actionString =  modelGen.getChoiceAction(node.getAction()).toString();
+			res = getReward(node.getState(), actionString);
 			succNode = sampleSucc(node);
 			depth = depth - 1;
 			
 		}
-		res = res + rollout(succNode, depth);
+		res = res + rollout(succNode, depth, bias);
 		node.updateExpectedRewEstimate(res);
 	
 		return res;
@@ -434,157 +440,42 @@ public final class UCT extends PrismComponent
 		
 		mainLog.println("\nRunning UCT...");
 		State initState = modelGen.getInitialState();
-		UCTNode initNode = new UCTNode(initState, -1, 1);
-		for (int i = 0; i < 10; i++) {
-			rollout(initNode, this.depth);
+		UCTNode initNode = new UCTNode(initState, -1, null, 1, true);
+		for (int i = 0; i < 10000; i++) {
+//			System.out.println("NODE" + initNode);
+			double bias = initNode.getExpectedRewEstimate();
+			//double bias = 500;
+			rollout(initNode, this.depth, bias);
+//			System.out.println(":_____________________");
 		}
-		System.out.println("PILA" + initNode.getExpectedRewEstimate());
-		getBestPolicy(initNode);
+//		System.out.println("PILA" + initNode.getExpectedRewEstimate());
+		UCTNode finalNode = getBestPolicy(initNode);
 	}
 	
 	
-	public void getBestPolicy(UCTNode node) throws PrismException{
-		if (node.getAction() != -1) {
+	public UCTNode getBestPolicy(UCTNode node) throws PrismException{
+		if (!node.isDecisionNode()) {
 			modelGen.exploreState(node.state);
-			System.out.println(modelGen.getTransitionAction(node.getAction()).toString());
+			System.out.println(modelGen.getTransitionAction(node.getAction(),0).toString());
+			System.out.println(modelGen.getChoiceAction(node.getAction()).toString());
+			System.out.println("_________________");
 		}
-		System.out.println("HELLO");
 		double max = Double.MIN_VALUE;
 		UCTNode bestNextNode = null;
 		for (int i = 0; i < node.getNumSuccs(); i++) {
 			UCTNode currentNode = node.getSuccNodes()[i];
 			if (currentNode.getExpectedRewEstimate() > max) {
 				bestNextNode = currentNode;
+				max = currentNode.getExpectedRewEstimate();
 			}
 		}
 		if (bestNextNode != null) {
-			getBestPolicy(bestNextNode);
+			return getBestPolicy(bestNextNode);
+		} else {
+			return node;
 		}
 	}
 	
 	
 }
 	
-
-//	/**
-//	 * 
-//	 * @param target
-//	 */
-//	public void setTarget(Expression target)
-//	{
-//		this.target = target;
-//	}
-	
-
-
-/*
-	*//**
-	 * Compute transient probability distribution (forwards).
-	 * Start from initial state (or uniform distribution over multiple initial states).
-	 *//*
-	public StateValues doTransient(double time) throws PrismException
-	{
-		return doTransient(time, (StateValues) null);
-	}
-
-	*//**
-	 * Compute transient probability distribution (forwards).
-	 * Optionally, use the passed in file initDistFile to give the initial probability distribution (time 0).
-	 * If null, start from initial state (or uniform distribution over multiple initial states).
-	 * @param t Time point
-	 * @param initDistFile File containing initial distribution
-	 * @param currentModel 
-	 *//*
-	public StateValues doTransient(double t, File initDistFile, Model model)
-			throws PrismException
-	{
-		StateValues initDist = null;
-		if (initDistFile != null) {
-			int numValues = countNumStates(initDistFile);
-			initDist = new StateValues(TypeDouble.getInstance(), numValues);
-			initDist.readFromFile(initDistFile);
-		}
-		return doTransient(t, initDist);
-	}
-
-
-	*//**
-	 * Compute transient probability distribution (forwards).
-	 * Use the passed in vector initDist as the initial probability distribution (time 0).
-	 * In case initDist is null starts at the default initial state with prob 1.
-	 * 
-	 * @param time Time point
-	 * @param initDist Initial distribution
-	 *//*
-	public StateValues doTransient(double time, StateValues initDist) throws PrismException
-	{
-		if (!modelGen.hasSingleInitialState())
-			throw new PrismException("Fast adaptive uniformisation does not yet support models with multiple initial states");
-		
-		mainLog.println("\nComputing probabilities (fast adaptive uniformisation)...");
-		
-		if (initDist == null) {
-			initDist = new StateValues();
-			initDist.type = TypeDouble.getInstance();
-			initDist.size = 1;
-			initDist.valuesD = new double[1];
-			initDist.statesList = new ArrayList<State>();
-			initDist.valuesD[0] = 1.0;
-			initDist.statesList.add(modelGen.getInitialState());
-		}
-
-	*//**
-	 * Computes successor rates and rewards for a given state.
-	 * Rewards computed depend on the reward structure set by
-	 * {@code setRewardStruct}.
-	 * 
-	 * @param state state to compute successor rates and rewards for
-	 * @throws PrismException thrown if something goes wrong
-	 *//*
-	private void computeStateRatesAndRewards(State state) throws PrismException
-	{
-		double[] succRates;
-		StateProp[] succStates;
-		modelGen.exploreState(state);
-		specialLabels.setLabel(0, modelGen.getNumTransitions() == 0 ? Expression.True() : Expression.False());
-		specialLabels.setLabel(1, initStates.contains(state) ? Expression.True() : Expression.False());
-		Expression evSink = sink.deepCopy();
-		evSink = (Expression) evSink.expandLabels(specialLabels);
-		if (evSink.evaluateBoolean(constantValues, state)) {
-			succRates = new double[1];
-			succStates = new StateProp[1];
-			succRates[0] = 1.0;
-			succStates[0] = states.get(state);
-		} else {
-			int nc = modelGen.getNumChoices();
-			succRates = new double[nc];
-			succStates = new StateProp[nc];
-			for (int i = 0; i < nc; i++) {
-				int nt = modelGen.getNumTransitions(i);
-				for (int j = 0; j < nt; j++) {
-					State succState = modelGen.computeTransitionTarget(i, j);
-					StateProp succProp = states.get(succState);
-					if (null == succProp) {
-						addToModel(succState);
-						modelGen.exploreState(state);
-						succProp = states.get(succState);
-					}
-					succRates[i] = modelGen.getTransitionProbability(i, j);
-					succStates[i] = succProp;
-				}
-			}
-			if (nc == 0) {
-				succRates = new double[1];
-				succStates = new StateProp[1];
-				succRates[0] = 1.0;
-				succStates[0] = states.get(state);
-			}
-		}
-		states.get(state).setSuccRates(succRates);
-		states.get(state).setSuccStates(succStates);
-	}
-
-
-
-
-*/
