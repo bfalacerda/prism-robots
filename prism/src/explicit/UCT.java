@@ -32,11 +32,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 
@@ -47,6 +50,7 @@ import parser.ast.RewardStruct;
 import parser.type.TypeDouble;
 import parser.Values;
 import parser.State;
+import parser.VarList;
 import prism.*;
 import prism.Model;
 
@@ -450,6 +454,73 @@ public final class UCT extends PrismComponent
 		}
 //		System.out.println("PILA" + initNode.getExpectedRewEstimate());
 		UCTNode finalNode = getBestPolicy(initNode);
+		
+		
+		DTMC dtmc = buildDTMC(initNode);
+		dtmc.exportToDotFile("/home/bruno/Desktop/dtmc.dot");
+		dtmc.exportToPrismLanguage("/home/bruno/Desktop/dtmc.prism");
+	}
+	
+	
+	public DTMC buildDTMC(UCTNode node) {
+		DTMCSimple dtmc = new DTMCSimple();
+		int i, currentStateIndex, succStateIndex, nSuccs;
+		double max, prob;
+		UCTNode currentNode, currentSucc, bestSucc, succs[];
+		Deque<UCTNode> nodeQueue = new ArrayDeque<UCTNode>();
+		Deque<Integer> indexQueue = new ArrayDeque<Integer>();
+		List<State> statesList = new ArrayList<State>();
+		
+		VarList varList = modelGen.createVarList();
+		dtmc.setVarList(varList);
+		
+		nodeQueue.add(node);
+		currentStateIndex = dtmc.addState();
+		dtmc.addInitialState(currentStateIndex);
+		indexQueue.add(currentStateIndex);
+		statesList.add(node.getState());
+		
+		
+				
+		while(!nodeQueue.isEmpty()) {
+			currentNode = nodeQueue.poll();
+			currentStateIndex = indexQueue.poll();
+			
+			//find succ corresponding to best decision
+			succs = currentNode.getSuccNodes();
+			nSuccs = currentNode.getNumSuccs();
+			max = Double.MIN_VALUE;
+			bestSucc = null;
+			for (i = 0; i < nSuccs; i++) {
+				currentSucc = succs[i];
+				if (currentSucc.getExpectedRewEstimate() > max) {
+					bestSucc = currentSucc;
+					max = currentSucc.getExpectedRewEstimate();
+				}
+			}
+			
+			
+			//add and queue all succs corresponding to possible outcomes for best decision
+			if (bestSucc != null) {
+				currentNode = bestSucc;
+				succs = currentNode.getSuccNodes();
+				nSuccs = currentNode.getNumSuccs();
+				for (i = 0; i < nSuccs; i++) {
+					currentSucc = succs[i];
+					succStateIndex = dtmc.addState();
+					prob = currentSucc.getReachProb();
+					dtmc.setProbability(currentStateIndex, succStateIndex, prob);
+					nodeQueue.add(currentSucc);
+					indexQueue.add(succStateIndex);
+					statesList.add(currentSucc.getState());
+				}
+			}
+			
+		}
+	
+		dtmc.setStatesList(statesList);
+		System.out.println(varList.getName(1));
+		return dtmc;
 	}
 	
 	
