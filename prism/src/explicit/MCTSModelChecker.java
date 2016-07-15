@@ -26,6 +26,14 @@
 
 package explicit;
 
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.List;
+import java.util.Vector;
+
+import acceptance.AcceptanceOmega;
+import acceptance.AcceptanceType;
+import automata.DA;
 import parser.Values;
 import parser.ast.Expression;
 import parser.ast.ExpressionReward;
@@ -38,6 +46,7 @@ import prism.ModelGenerator;
 import prism.PrismComponent;
 import prism.PrismException;
 import prism.PrismNotSupportedException;
+import prism.ProductModelGenerator;
 import prism.Result;
 import simulator.ModulesFileModelGenerator;
 
@@ -134,5 +143,26 @@ public class MCTSModelChecker extends PrismComponent
 		uct.search();
 		mainLog.println("\nThe reward is " + uct.toString());
 		return new Result(new Double(1));//uct.getReward()
+	}
+	
+	private Result checkExpressionReward2(ExpressionReward expr) throws PrismException
+	{
+		System.out.println("LTL"  + expr.getExpression());
+		LTLModelChecker ltlMC = new LTLModelChecker(this);
+		List<Expression> labelExprs = new ArrayList<Expression>();
+		AcceptanceType[] allowedAcceptance = {
+				AcceptanceType.RABIN,
+				AcceptanceType.REACH
+		};
+		DA<BitSet,? extends AcceptanceOmega> da = ltlMC.constructExpressionDAForLTLFormula(expr.getExpression(), labelExprs, allowedAcceptance);
+		ModulesFileModelGenerator prismModelGen = new ModulesFileModelGenerator(modulesFile, this);
+		ProductModelGenerator prodModelGen = new ProductModelGenerator(prismModelGen, da, labelExprs);
+		
+		// Build/print product (just to test)
+		ConstructModel constructModel = new ConstructModel(this);
+		Model prodModel = constructModel.constructModel(prodModelGen);
+		prodModel.exportToPrismExplicitTra(mainLog);
+		
+		return new Result(new Double(1));
 	}
 }
