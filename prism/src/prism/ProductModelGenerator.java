@@ -31,6 +31,7 @@ import java.util.BitSet;
 import java.util.List;
 
 import acceptance.AcceptanceOmega;
+import acceptance.AcceptanceReach;
 import automata.DA;
 import parser.State;
 import parser.Values;
@@ -102,6 +103,22 @@ public class ProductModelGenerator implements ModelGenerator
 	{
 		return daVar;
 	}
+	
+	/**
+	 * Assuming the product is build with a reach acceptance,
+	 * is the state currently being explored a goal state?
+	 */
+	public boolean isReachAcceptanceGoalState()
+	{
+		AcceptanceOmega acc = da.getAcceptance();
+		if (!(acc instanceof AcceptanceReach)) {
+			return false;
+		}
+		AcceptanceReach accReach = (AcceptanceReach) acc;
+		return accReach.getGoalStates().get(exploreDaState);
+	}
+	
+	
 	
 	// Methods to implement ModelGenerator
 	

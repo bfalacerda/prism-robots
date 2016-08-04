@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +43,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+
+import acceptance.AcceptanceOmega;
+import acceptance.AcceptanceRabin;
+import acceptance.AcceptanceReach;
+import automata.DA;
 
 import parser.ast.Expression;
 import parser.ast.ExpressionIdent;
@@ -437,7 +443,7 @@ public final class UCT extends PrismComponent
 
 	}
 	
-	public void search() throws PrismException
+	public UCTNode search() throws PrismException
 	{
 		if (!modelGen.hasSingleInitialState())
 			throw new PrismException("UCT rquires a single initial state");
@@ -453,12 +459,8 @@ public final class UCT extends PrismComponent
 //			System.out.println(":_____________________");
 		}
 //		System.out.println("PILA" + initNode.getExpectedRewEstimate());
-		UCTNode finalNode = getBestPolicy(initNode);
-		
-		
-		DTMC dtmc = buildDTMC(initNode);
-		dtmc.exportToDotFile("/home/bruno/Desktop/dtmc.dot");
-		dtmc.exportToPrismLanguage("/home/bruno/Desktop/dtmc.prism");
+//		UCTNode finalNode = getBestPolicy(initNode);
+		return initNode;
 	}
 	
 	
@@ -469,6 +471,7 @@ public final class UCT extends PrismComponent
 		UCTNode currentNode, currentSucc, bestSucc, succs[];
 		Deque<UCTNode> nodeQueue = new ArrayDeque<UCTNode>();
 		Deque<Integer> indexQueue = new ArrayDeque<Integer>();
+		State currentState;
 		List<State> statesList = new ArrayList<State>();
 		
 		VarList varList = modelGen.createVarList();
@@ -500,6 +503,8 @@ public final class UCT extends PrismComponent
 			}
 			
 			
+
+			
 			//add and queue all succs corresponding to possible outcomes for best decision
 			if (bestSucc != null) {
 				currentNode = bestSucc;
@@ -512,14 +517,20 @@ public final class UCT extends PrismComponent
 					dtmc.setProbability(currentStateIndex, succStateIndex, prob);
 					nodeQueue.add(currentSucc);
 					indexQueue.add(succStateIndex);
-					statesList.add(currentSucc.getState());
+					currentState = currentSucc.getState();
+					statesList.add(currentState);
+					System.out.println(currentState);
 				}
 			}
 			
 		}
 	
 		dtmc.setStatesList(statesList);
-		System.out.println(varList.getName(1));
+		System.out.println(varList.getName(0));
+		
+		
+		
+		
 		return dtmc;
 	}
 	

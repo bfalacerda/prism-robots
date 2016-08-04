@@ -201,11 +201,11 @@ public class MDPModelChecker extends ProbModelChecker
 		mainLog.println("\nThe generated policy will satisfy specification with probability " + maxProb);
 		
 		if (getExportProductVector()) {
-                                mainLog.println("\nExporting success probabilites over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1) + "\"...");
-                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1));
-                                probsProduct.print(out, false, false, false, false);
-                                out.close();
-                }
+			mainLog.println("\nExporting success probabilites over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1) + "\"...");
+            PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1));
+            probsProduct.print(out, false, false, false, false);
+            out.close();
+        }
 				
 		rewsProduct = StateValues.createFromDoubleArray(res.solnProg, sparseMdp);
 		rews = product.projectToOriginalModel(rewsProduct); 
@@ -355,11 +355,11 @@ public class MDPModelChecker extends ProbModelChecker
 		mainLog.println("\nMaximum probability to satisfy specification is " + maxProb);
 		
 		if (getExportProductVector()) {
-                                mainLog.println("\nExporting success probabilites over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1) + "\"...");
-                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1));
-                                probsProduct.print(out, false, false, false, false);
-                                out.close();
-                }
+			mainLog.println("\nExporting success probabilites over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1) + "\"...");
+            PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 1));
+            probsProduct.print(out, false, false, false, false);
+            out.close();
+        }
 				
 		rewsProduct = StateValues.createFromDoubleArray(res.solnProg, productMdp);
 		rews = product.projectToOriginalModel(rewsProduct); 
@@ -367,11 +367,11 @@ public class MDPModelChecker extends ProbModelChecker
 		mainLog.println("\nFor p = " + maxProb + ", the maximum expected cummulative reward to satisfy specification is " + maxRew);
 		
 		if (getExportProductVector()) {
-                                mainLog.println("\nExporting expected progression reward over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2) + "\"...");
-                                PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2));
-                                rewsProduct.print(out, false, false, false, false);
-                                out.close();
-                }
+			mainLog.println("\nExporting expected progression reward over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2) + "\"...");
+            PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 2));
+            rewsProduct.print(out, false, false, false, false);
+            out.close();
+        }
 		
 		costsProduct = StateValues.createFromDoubleArray(res.solnCost, productMdp);		
 		costs = product.projectToOriginalModel(costsProduct);	
@@ -382,10 +382,10 @@ public class MDPModelChecker extends ProbModelChecker
 //		System.out.println("Expected time to execute task: " + minCost);
 //		System.out.println("--------------------------------------------------------------");
         if (getExportProductVector()) {
-                        mainLog.println("\nExporting expected times until no more progression over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3) + "\"...");
-                        PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3));
-                        costsProduct.print(out, false, false, false, false);
-                        out.close();
+        	mainLog.println("\nExporting expected times until no more progression over product to file \"" + PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3) + "\"...");
+            PrismFileLog out = new PrismFileLog(PrismUtils.addCounterSuffixToFilename(getExportProductVectorFilename(), 3));
+            costsProduct.print(out, false, false, false, false);
+            out.close();
         }
 		
 		return costs;
